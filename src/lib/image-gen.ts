@@ -92,7 +92,7 @@ export async function generateImage(options: GenerationOptions): Promise<Generat
   }
 
   try {
-    const output = await replicate.run(preset.model, {
+    const output = await replicate.run(preset.model as `${string}/${string}`, {
       input: {
         prompt: fullPrompt,
         negative_prompt: negativePrompt || 'blurry, low quality, distorted, ugly, bad anatomy',

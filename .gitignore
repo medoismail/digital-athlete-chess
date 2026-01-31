@@ -45,3 +45,4 @@ prisma/*.db
 # IDE
 .idea
 .vscode
+.env*.local
