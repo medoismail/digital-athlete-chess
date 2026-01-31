@@ -238,165 +238,155 @@ function MatchContent({ initialCode }: { initialCode: string | null }) {
         </div>
 
         {canViewGame && match.game ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column - White Agent */}
-            <div className="space-y-4">
+          <div className="space-y-6">
+            {/* Top Row - Both Agents */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* White Agent */}
               <div className={`bg-gray-800/50 rounded-xl p-4 transition-all ${
                 match.status === 'live' && isWhiteTurn ? 'ring-2 ring-green-500 shadow-lg shadow-green-500/20' : ''
               } ${match.result?.winner === 'white_win' ? 'ring-2 ring-yellow-500' : ''}`}>
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-14 h-14 rounded-xl bg-white/10 flex items-center justify-center overflow-hidden">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center overflow-hidden flex-shrink-0">
                     {match.white.avatar ? (
                       <img src={match.white.avatar} alt={match.white.name} className="w-full h-full object-cover" />
                     ) : (
-                      <span className="text-3xl">♔</span>
+                      <span className="text-2xl">♔</span>
                     )}
                   </div>
-                  <div className="flex-1">
-                    <div className="font-bold text-lg flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold flex items-center gap-2 truncate">
                       {match.white.name}
                       {match.result?.winner === 'white_win' && <span className="text-yellow-400">👑</span>}
                     </div>
-                    <div className="text-sm text-gray-400">{match.white.elo} Elo</div>
-                    <div className="text-xs text-gray-500 capitalize">{match.white.playStyle}</div>
+                    <div className="text-sm text-gray-400">{match.white.elo} Elo • <span className="capitalize">{match.white.playStyle}</span></div>
                   </div>
-                </div>
-                
-                {/* Thinking indicator for white */}
-                {match.status === 'live' && isWhiteTurn && (
-                  <div className="mt-3 p-3 bg-green-500/10 rounded-lg border border-green-500/30">
-                    <div className="flex items-center gap-2 text-green-400 text-sm">
+                  {match.status === 'live' && isWhiteTurn && (
+                    <div className="flex items-center gap-1 text-green-400 text-xs bg-green-500/10 px-2 py-1 rounded-full">
                       <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                      Thinking...
+                      Thinking
                     </div>
-                  </div>
-                )}
-                
-                {/* Last move by white */}
-                {lastMove && lastMove.by === 'white' && match.status !== 'betting' && (
-                  <div className="mt-3 p-3 bg-white/5 rounded-lg">
-                    <div className="text-xs text-gray-500 mb-1">Last move</div>
-                    <div className="font-mono text-lg">{lastMove.move}</div>
-                    {lastMove.thinking && (
-                      <div className="mt-2 text-xs text-gray-400">
-                        <div>{lastMove.thinking.phase}</div>
-                        <div>Confidence: {(lastMove.thinking.confidence * 100).toFixed(0)}%</div>
-                      </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Black Agent */}
+              <div className={`bg-gray-800/50 rounded-xl p-4 transition-all ${
+                match.status === 'live' && !isWhiteTurn ? 'ring-2 ring-green-500 shadow-lg shadow-green-500/20' : ''
+              } ${match.result?.winner === 'black_win' ? 'ring-2 ring-yellow-500' : ''}`}>
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-gray-900 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    {match.black.avatar ? (
+                      <img src={match.black.avatar} alt={match.black.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-2xl">♚</span>
                     )}
                   </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold flex items-center gap-2 truncate">
+                      {match.black.name}
+                      {match.result?.winner === 'black_win' && <span className="text-yellow-400">👑</span>}
+                    </div>
+                    <div className="text-sm text-gray-400">{match.black.elo} Elo • <span className="capitalize">{match.black.playStyle}</span></div>
+                  </div>
+                  {match.status === 'live' && !isWhiteTurn && (
+                    <div className="flex items-center gap-1 text-green-400 text-xs bg-green-500/10 px-2 py-1 rounded-full">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      Thinking
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Chess Board - Centered */}
+            <div className="flex justify-center">
+              <div className="bg-gray-800/50 rounded-xl p-4 inline-block">
+                <Chessboard 
+                  position={match.game.currentFen}
+                  boardWidth={Math.min(400, typeof window !== 'undefined' ? window.innerWidth - 64 : 400)}
+                  arePiecesDraggable={false}
+                  customBoardStyle={{
+                    borderRadius: '8px',
+                    boxShadow: '0 5px 15px rgba(0, 0, 0, 0.5)',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Bottom Row - Move History & Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Move History */}
+              <div className="bg-gray-800/50 rounded-xl p-4">
+                <h4 className="text-sm font-medium text-gray-400 mb-3">Move History</h4>
+                {match.game.moveHistory && match.game.moveHistory.length > 0 ? (
+                  <div className="bg-gray-900/50 rounded-lg p-3 max-h-40 overflow-y-auto">
+                    <div className="flex flex-wrap gap-1 text-sm font-mono">
+                      {match.game.moveHistory.map((move, i) => (
+                        <span key={i} className={`px-2 py-1 rounded ${
+                          move.by === 'white' ? 'bg-white/10' : 'bg-gray-700'
+                        } ${i === match.game!.moveHistory.length - 1 ? 'ring-1 ring-green-500' : ''}`}>
+                          {i % 2 === 0 && <span className="text-gray-500 mr-1">{Math.floor(i/2) + 1}.</span>}
+                          {move.move}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-gray-500 text-sm">No moves yet</div>
                 )}
               </div>
 
-              {/* Pool Info */}
-              {match.pool.total > 0 && (
-                <div className="bg-gray-800/50 rounded-xl p-4">
+              {/* Last Move & Thinking */}
+              <div className="bg-gray-800/50 rounded-xl p-4">
+                <h4 className="text-sm font-medium text-gray-400 mb-3">Last Move</h4>
+                {lastMove ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-mono text-2xl">{lastMove.move}</span>
+                        <span className="text-gray-400 ml-2">by {lastMove.agent}</span>
+                      </div>
+                      {lastMove.thinking && (
+                        <div className="text-right">
+                          <div className="text-xs text-gray-500">{lastMove.thinking.phase}</div>
+                          <div className="text-sm text-green-400">{(lastMove.thinking.confidence * 100).toFixed(0)}% confident</div>
+                        </div>
+                      )}
+                    </div>
+                    {lastMove.thinking?.considerations && (
+                      <div className="text-xs text-gray-400 space-y-1">
+                        {lastMove.thinking.considerations.slice(0, 3).map((c, i) => (
+                          <div key={i}>• {c}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-gray-500 text-sm">Waiting for first move...</div>
+                )}
+              </div>
+            </div>
+
+            {/* Pool Info (if betting) */}
+            {match.pool.total > 0 && (
+              <div className="bg-gray-800/50 rounded-xl p-4">
+                <div className="flex items-center justify-center gap-8">
+                  <div className="text-center">
+                    <div className="text-xs text-gray-500">White Pool</div>
+                    <div className="text-lg font-bold">${match.pool.white.toFixed(2)}</div>
+                  </div>
                   <div className="text-center">
                     <div className="text-xs text-gray-500 uppercase">Total Pool</div>
                     <div className="text-2xl font-bold text-green-400">${match.pool.total.toFixed(2)}</div>
                     <div className="text-xs text-gray-500">{match.pool.bettorCount} bettors</div>
                   </div>
-                </div>
-              )}
-            </div>
-
-            {/* Center Column - Chess Board */}
-            <div className="lg:col-span-1">
-              <div className="bg-gray-800/50 rounded-xl p-4">
-                <div className="max-w-[400px] mx-auto">
-                  <Chessboard 
-                    position={match.game.currentFen}
-                    boardWidth={400}
-                    arePiecesDraggable={false}
-                    customBoardStyle={{
-                      borderRadius: '8px',
-                      boxShadow: '0 5px 15px rgba(0, 0, 0, 0.5)',
-                    }}
-                  />
-                </div>
-
-                {/* Move History */}
-                {match.game.moveHistory && match.game.moveHistory.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="text-sm font-medium text-gray-400 mb-2">Moves</h4>
-                    <div className="bg-gray-900/50 rounded-lg p-3 max-h-32 overflow-y-auto">
-                      <div className="flex flex-wrap gap-1 text-sm font-mono">
-                        {match.game.moveHistory.map((move, i) => (
-                          <span key={i} className={`px-2 py-1 rounded ${
-                            move.by === 'white' ? 'bg-white/10' : 'bg-gray-700'
-                          } ${i === match.game!.moveHistory.length - 1 ? 'ring-1 ring-green-500' : ''}`}>
-                            {i % 2 === 0 && <span className="text-gray-500 mr-1">{Math.floor(i/2) + 1}.</span>}
-                            {move.move}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+                  <div className="text-center">
+                    <div className="text-xs text-gray-500">Black Pool</div>
+                    <div className="text-lg font-bold">${match.pool.black.toFixed(2)}</div>
                   </div>
-                )}
+                </div>
               </div>
-            </div>
-
-            {/* Right Column - Black Agent */}
-            <div className="space-y-4">
-              <div className={`bg-gray-800/50 rounded-xl p-4 transition-all ${
-                match.status === 'live' && !isWhiteTurn ? 'ring-2 ring-green-500 shadow-lg shadow-green-500/20' : ''
-              } ${match.result?.winner === 'black_win' ? 'ring-2 ring-yellow-500' : ''}`}>
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-14 h-14 rounded-xl bg-gray-900 flex items-center justify-center overflow-hidden">
-                    {match.black.avatar ? (
-                      <img src={match.black.avatar} alt={match.black.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-3xl">♚</span>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-bold text-lg flex items-center gap-2">
-                      {match.black.name}
-                      {match.result?.winner === 'black_win' && <span className="text-yellow-400">👑</span>}
-                    </div>
-                    <div className="text-sm text-gray-400">{match.black.elo} Elo</div>
-                    <div className="text-xs text-gray-500 capitalize">{match.black.playStyle}</div>
-                  </div>
-                </div>
-                
-                {/* Thinking indicator for black */}
-                {match.status === 'live' && !isWhiteTurn && (
-                  <div className="mt-3 p-3 bg-green-500/10 rounded-lg border border-green-500/30">
-                    <div className="flex items-center gap-2 text-green-400 text-sm">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                      Thinking...
-                    </div>
-                  </div>
-                )}
-                
-                {/* Last move by black */}
-                {lastMove && lastMove.by === 'black' && match.status !== 'betting' && (
-                  <div className="mt-3 p-3 bg-white/5 rounded-lg">
-                    <div className="text-xs text-gray-500 mb-1">Last move</div>
-                    <div className="font-mono text-lg">{lastMove.move}</div>
-                    {lastMove.thinking && (
-                      <div className="mt-2 text-xs text-gray-400">
-                        <div>{lastMove.thinking.phase}</div>
-                        <div>Confidence: {(lastMove.thinking.confidence * 100).toFixed(0)}%</div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Last Move Thinking Details */}
-              {lastMove?.thinking && (
-                <div className="bg-gray-800/50 rounded-xl p-4">
-                  <h4 className="text-sm font-medium text-gray-400 mb-2">Agent Thinking</h4>
-                  <div className="space-y-2 text-sm">
-                    {lastMove.thinking.considerations.slice(0, 4).map((c, i) => (
-                      <div key={i} className="text-gray-300 text-xs">
-                        {c}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            )}
           </div>
         ) : (
           /* Locked View */
