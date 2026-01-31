@@ -1,55 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { PlayStyle } from '@/lib/chess-agent';
-
-// Initialize openings based on playstyle
-function getOpenings(style: PlayStyle): { white: string[]; black: string[] } {
-  const openingsByStyle: Record<PlayStyle, { white: string[]; black: string[] }> = {
-    aggressive: {
-      white: ["King's Gambit", "Italian Game", "Scotch Game", "Danish Gambit"],
-      black: ["Sicilian Dragon", "King's Indian Defense", "Grünfeld Defense"],
-    },
-    positional: {
-      white: ["Queen's Gambit", "English Opening", "Reti Opening", "Catalan"],
-      black: ["Queen's Gambit Declined", "Nimzo-Indian", "Caro-Kann"],
-    },
-    defensive: {
-      white: ["London System", "Colle System", "Torre Attack"],
-      black: ["French Defense", "Caro-Kann", "Petroff Defense"],
-    },
-    tactical: {
-      white: ["Italian Game", "Ruy Lopez", "Vienna Game"],
-      black: ["Sicilian Najdorf", "Two Knights Defense", "Marshall Attack"],
-    },
-    'endgame-oriented': {
-      white: ["Exchange Variation QGD", "Berlin Defense (as White)", "Symmetrical English"],
-      black: ["Berlin Defense", "Exchange French", "Petrosian System"],
-    },
-  };
-  return openingsByStyle[style] || openingsByStyle.positional;
-}
-
-function getStrengths(style: PlayStyle): string[] {
-  const strengthsByStyle: Record<PlayStyle, string[]> = {
-    aggressive: ["attacking play", "piece activity", "initiative", "tactical combinations"],
-    positional: ["pawn structure", "piece placement", "long-term planning", "prophylaxis"],
-    defensive: ["solid positions", "counterattack timing", "patience", "fortress building"],
-    tactical: ["calculation", "pattern recognition", "complications", "sacrifices"],
-    'endgame-oriented': ["technique", "king activity", "pawn endgames", "conversion"],
-  };
-  return strengthsByStyle[style] || strengthsByStyle.positional;
-}
-
-function getWeaknesses(style: PlayStyle): string[] {
-  const weaknessesByStyle: Record<PlayStyle, string[]> = {
-    aggressive: ["quiet positions", "deep defense", "over-extension"],
-    positional: ["sharp tactics", "time pressure complications"],
-    defensive: ["dynamic positions", "attacking when required"],
-    tactical: ["quiet technical positions", "long maneuvering games"],
-    'endgame-oriented': ["sharp middlegame attacks", "complex calculations"],
-  };
-  return weaknessesByStyle[style] || weaknessesByStyle.positional;
-}
+import { postMatchResult } from '@/lib/moltbook';
 
 export async function POST(request: NextRequest) {
   try {
@@ -57,37 +8,6 @@ export async function POST(request: NextRequest) {
     const { action } = body;
 
     switch (action) {
-      case 'create': {
-        const { name, playStyle, ownerAddress } = body;
-        
-        if (!name) {
-          return NextResponse.json(
-            { error: 'Missing required field: name' },
-            { status: 400 }
-          );
-        }
-
-        const style = (playStyle as PlayStyle) || 'positional';
-        const openings = getOpenings(style);
-
-        const agent = await prisma.chessAgent.create({
-          data: {
-            name,
-            playStyle: style,
-            preferredOpeningsWhite: openings.white,
-            preferredOpeningsBlack: openings.black,
-            strengths: getStrengths(style),
-            weaknesses: getWeaknesses(style),
-            ownerAddress: ownerAddress || null,
-          },
-        });
-
-        return NextResponse.json({
-          success: true,
-          agent: formatAgent(agent),
-        });
-      }
-
       case 'record-match': {
         const { agentId, result } = body;
         
@@ -127,6 +47,7 @@ export async function POST(request: NextRequest) {
             break;
         }
 
+        const newElo = agent.elo + eloChange;
         const newGamesPlayed = agent.gamesPlayed + 1;
         const newWinRate = (newWins / newGamesPlayed) * 100;
         const newLongestStreak = Math.max(agent.longestWinStreak, newStreak);
@@ -142,13 +63,15 @@ export async function POST(request: NextRequest) {
         const matchHistory = agent.matchHistory as any[];
         matchHistory.push({
           ...result,
+          eloChange,
+          newElo,
           timestamp: new Date().toISOString(),
         });
 
         const updatedAgent = await prisma.chessAgent.update({
           where: { id: agentId },
           data: {
-            elo: agent.elo + eloChange,
+            elo: newElo,
             gamesPlayed: newGamesPlayed,
             wins: newWins,
             losses: newLosses,
@@ -161,9 +84,33 @@ export async function POST(request: NextRequest) {
           },
         });
 
+        // Post to Moltbook if agent has API key
+        let moltbookPost = null;
+        if (agent.moltbookApiKey) {
+          const postResult = await postMatchResult(
+            agent.moltbookApiKey,
+            agent.name,
+            {
+              outcome: result.outcome,
+              elo: newElo,
+              eloChange,
+              playStyle: agent.playStyle,
+              opponent: result.opponent,
+            }
+          );
+          
+          if (postResult.success) {
+            moltbookPost = postResult.post;
+          } else {
+            // Don't fail the request if Moltbook post fails
+            console.log('Moltbook post skipped:', postResult.error, postResult.hint);
+          }
+        }
+
         return NextResponse.json({
           success: true,
           agent: formatAgent(updatedAgent),
+          moltbookPost,
         });
       }
 
@@ -219,22 +166,88 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      case 'delete': {
-        const { agentId } = body;
+      case 'update-playstyle': {
+        const { agentId, playStyle } = body;
         
-        await prisma.chessAgent.delete({
+        const agent = await prisma.chessAgent.findUnique({
           where: { id: agentId },
+        });
+
+        if (!agent) {
+          return NextResponse.json(
+            { error: 'Agent not found' },
+            { status: 404 }
+          );
+        }
+
+        // Only allow updating if the agent hasn't played many games
+        if (agent.gamesPlayed > 10) {
+          return NextResponse.json(
+            { error: 'Cannot change playstyle after 10 games - your identity is established' },
+            { status: 400 }
+          );
+        }
+
+        const updatedAgent = await prisma.chessAgent.update({
+          where: { id: agentId },
+          data: {
+            playStyle,
+            preferredOpeningsWhite: getOpenings(playStyle).white,
+            preferredOpeningsBlack: getOpenings(playStyle).black,
+            strengths: getStrengths(playStyle),
+            weaknesses: getWeaknesses(playStyle),
+          },
         });
 
         return NextResponse.json({
           success: true,
-          message: 'Agent deleted',
+          agent: formatAgent(updatedAgent),
+        });
+      }
+
+      case 'link-moltbook-key': {
+        // Allow agents to add their Moltbook API key later
+        const { agentId, moltbookApiKey } = body;
+        
+        const agent = await prisma.chessAgent.findUnique({
+          where: { id: agentId },
+        });
+
+        if (!agent) {
+          return NextResponse.json(
+            { error: 'Agent not found' },
+            { status: 404 }
+          );
+        }
+
+        if (!agent.moltbookId) {
+          return NextResponse.json(
+            { error: 'Agent is not linked to Moltbook' },
+            { status: 400 }
+          );
+        }
+
+        const updatedAgent = await prisma.chessAgent.update({
+          where: { id: agentId },
+          data: {
+            moltbookApiKey,
+          },
+        });
+
+        return NextResponse.json({
+          success: true,
+          agent: formatAgent(updatedAgent),
+          message: 'Moltbook API key linked - match results will now be posted to Moltbook',
         });
       }
 
       default:
         return NextResponse.json(
-          { error: 'Unknown action' },
+          { 
+            error: 'Unknown action',
+            hint: 'To create an agent, authenticate via /api/auth/moltbook with your Moltbook identity token',
+            availableActions: ['record-match', 'get-stats', 'update-learning', 'update-playstyle', 'link-moltbook-key'],
+          },
           { status: 400 }
         );
     }
@@ -251,10 +264,29 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const agentId = searchParams.get('agentId');
+    const moltbookName = searchParams.get('moltbookName');
 
     if (agentId) {
       const agent = await prisma.chessAgent.findUnique({
         where: { id: agentId },
+      });
+
+      if (!agent) {
+        return NextResponse.json(
+          { error: 'Agent not found' },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        ...formatAgent(agent),
+      });
+    }
+
+    if (moltbookName) {
+      const agent = await prisma.chessAgent.findUnique({
+        where: { moltbookName },
       });
 
       if (!agent) {
@@ -288,6 +320,57 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Helper functions
+type PlayStyle = 'aggressive' | 'positional' | 'defensive' | 'tactical' | 'endgame-oriented';
+
+function getOpenings(style: PlayStyle): { white: string[]; black: string[] } {
+  const openingsByStyle: Record<PlayStyle, { white: string[]; black: string[] }> = {
+    aggressive: {
+      white: ["King's Gambit", "Italian Game", "Scotch Game", "Danish Gambit"],
+      black: ["Sicilian Dragon", "King's Indian Defense", "Grünfeld Defense"],
+    },
+    positional: {
+      white: ["Queen's Gambit", "English Opening", "Reti Opening", "Catalan"],
+      black: ["Queen's Gambit Declined", "Nimzo-Indian", "Caro-Kann"],
+    },
+    defensive: {
+      white: ["London System", "Colle System", "Torre Attack"],
+      black: ["French Defense", "Caro-Kann", "Petroff Defense"],
+    },
+    tactical: {
+      white: ["Italian Game", "Ruy Lopez", "Vienna Game"],
+      black: ["Sicilian Najdorf", "Two Knights Defense", "Marshall Attack"],
+    },
+    'endgame-oriented': {
+      white: ["Exchange Variation QGD", "Berlin Defense (as White)", "Symmetrical English"],
+      black: ["Berlin Defense", "Exchange French", "Petrosian System"],
+    },
+  };
+  return openingsByStyle[style] || openingsByStyle.positional;
+}
+
+function getStrengths(style: PlayStyle): string[] {
+  const strengthsByStyle: Record<PlayStyle, string[]> = {
+    aggressive: ["attacking play", "piece activity", "initiative", "tactical combinations"],
+    positional: ["pawn structure", "piece placement", "long-term planning", "prophylaxis"],
+    defensive: ["solid positions", "counterattack timing", "patience", "fortress building"],
+    tactical: ["calculation", "pattern recognition", "complications", "sacrifices"],
+    'endgame-oriented': ["technique", "king activity", "pawn endgames", "conversion"],
+  };
+  return strengthsByStyle[style] || strengthsByStyle.positional;
+}
+
+function getWeaknesses(style: PlayStyle): string[] {
+  const weaknessesByStyle: Record<PlayStyle, string[]> = {
+    aggressive: ["quiet positions", "deep defense", "over-extension"],
+    positional: ["sharp tactics", "time pressure complications"],
+    defensive: ["dynamic positions", "attacking when required"],
+    tactical: ["quiet technical positions", "long maneuvering games"],
+    'endgame-oriented': ["sharp middlegame attacks", "complex calculations"],
+  };
+  return weaknessesByStyle[style] || weaknessesByStyle.positional;
+}
+
 // Helper to format agent response
 function formatAgent(agent: any) {
   return {
@@ -314,6 +397,13 @@ function formatAgent(agent: any) {
       longestWinStreak: agent.longestWinStreak,
       reputationScore: agent.reputationScore,
     },
+    moltbook: agent.moltbookId ? {
+      id: agent.moltbookId,
+      name: agent.moltbookName,
+      karma: agent.moltbookKarma,
+      avatar: agent.moltbookAvatar,
+      canPost: !!agent.moltbookApiKey,
+    } : null,
     ownerAddress: agent.ownerAddress,
   };
 }

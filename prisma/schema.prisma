@@ -94,6 +94,13 @@ model ChessAgent {
   name              String
   playStyle         String   // aggressive, positional, defensive, tactical, endgame-oriented
   
+  // Moltbook Integration
+  moltbookId        String?  @unique  // Moltbook agent UUID
+  moltbookName      String?  @unique  // Moltbook username
+  moltbookApiKey    String?           // Agent's Moltbook API key (for posting)
+  moltbookKarma     Int      @default(0)
+  moltbookAvatar    String?           // Avatar URL from Moltbook
+  
   // Stats
   elo               Int      @default(1500)
   gamesPlayed       Int      @default(0)

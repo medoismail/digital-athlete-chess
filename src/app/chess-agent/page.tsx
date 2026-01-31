@@ -5,6 +5,14 @@ import Link from 'next/link';
 
 type PlayStyle = 'aggressive' | 'positional' | 'defensive' | 'tactical' | 'endgame-oriented';
 
+interface MoltbookInfo {
+  id: string;
+  name: string;
+  karma: number;
+  avatar: string | null;
+  canPost: boolean;
+}
+
 interface AgentIdentity {
   id: string;
   name: string;
@@ -30,6 +38,7 @@ interface AgentStats {
 interface ChessAgentData {
   identity: AgentIdentity;
   stats: AgentStats;
+  moltbook: MoltbookInfo | null;
   ownerAddress?: string;
 }
 
@@ -60,14 +69,16 @@ const styleBadgeColors: Record<PlayStyle, string> = {
 };
 
 export default function ChessAgentPage() {
-  const [agentName, setAgentName] = useState('');
+  const [identityToken, setIdentityToken] = useState('');
+  const [moltbookApiKey, setMoltbookApiKey] = useState('');
   const [selectedStyle, setSelectedStyle] = useState<PlayStyle>('positional');
   const [selectedAgent, setSelectedAgent] = useState<ChessAgentData | null>(null);
   const [allAgents, setAllAgents] = useState<ChessAgentData[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingAgents, setLoadingAgents] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<'create' | 'leaderboard' | 'detail'>('leaderboard');
+  const [view, setView] = useState<'signin' | 'leaderboard' | 'detail'>('leaderboard');
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
 
   // Fetch all agents on load
   useEffect(() => {
@@ -89,9 +100,9 @@ export default function ChessAgentPage() {
     }
   };
 
-  const createAgent = async () => {
-    if (!agentName.trim()) {
-      setError('Please enter a name for your agent');
+  const signInWithMoltbook = async () => {
+    if (!identityToken.trim()) {
+      setError('Please enter your Moltbook identity token');
       return;
     }
 
@@ -99,12 +110,12 @@ export default function ChessAgentPage() {
     setError(null);
 
     try {
-      const response = await fetch('/api/chess-agent', {
+      const response = await fetch('/api/auth/moltbook', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'create',
-          name: agentName,
+          token: identityToken,
+          moltbookApiKey: moltbookApiKey || undefined,
           playStyle: selectedStyle,
         }),
       });
@@ -112,12 +123,45 @@ export default function ChessAgentPage() {
       const data = await response.json();
 
       if (data.success) {
-        setSelectedAgent(data.agent);
+        // Transform the response to match our interface
+        const agent: ChessAgentData = {
+          identity: {
+            id: data.agent.id,
+            name: data.agent.name,
+            playStyle: data.agent.playStyle,
+            preferredOpenings: { white: [], black: [] }, // Will be fetched from detail
+            strengths: [],
+            weaknesses: [],
+            createdAt: new Date().toISOString(),
+          },
+          stats: data.agent.stats,
+          moltbook: data.agent.moltbook ? {
+            id: data.agent.moltbook.id,
+            name: data.agent.moltbook.name,
+            karma: data.agent.moltbook.karma,
+            avatar: data.agent.moltbook.avatar,
+            canPost: data.agent.canPostToMoltbook,
+          } : null,
+        };
+        
+        // Fetch full agent details
+        const detailResponse = await fetch(`/api/chess-agent?agentId=${data.agent.id}`);
+        const detailData = await detailResponse.json();
+        if (detailData.success) {
+          setSelectedAgent({
+            ...detailData,
+            moltbook: agent.moltbook,
+          });
+        } else {
+          setSelectedAgent(agent);
+        }
+        
         setView('detail');
-        setAgentName('');
-        fetchAgents(); // Refresh the list
+        setIdentityToken('');
+        setMoltbookApiKey('');
+        fetchAgents();
       } else {
-        setError(data.error || 'Failed to create agent');
+        setError(data.error || 'Failed to sign in');
       }
     } catch (err) {
       setError('Network error. Please try again.');
@@ -146,8 +190,17 @@ export default function ChessAgentPage() {
 
       const data = await response.json();
       if (data.success) {
-        setSelectedAgent(data.agent);
+        // Preserve moltbook info when updating
+        setSelectedAgent(prev => ({
+          ...data.agent,
+          moltbook: prev?.moltbook || data.agent.moltbook,
+        }));
         fetchAgents();
+        
+        // Show if posted to Moltbook
+        if (data.moltbookPost) {
+          alert(`Match posted to Moltbook! View at: ${data.moltbookPost.url}`);
+        }
       }
     } catch (err) {
       console.error('Failed to record match:', err);
@@ -174,14 +227,14 @@ export default function ChessAgentPage() {
               Leaderboard
             </button>
             <button
-              onClick={() => { setView('create'); setSelectedAgent(null); }}
-              className={`px-4 py-2 rounded-lg transition-all ${
-                view === 'create' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
+              onClick={() => { setView('signin'); setSelectedAgent(null); }}
+              className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
+                view === 'signin' 
+                  ? 'bg-orange-600 text-white' 
+                  : 'bg-orange-600/20 text-orange-400 hover:bg-orange-600/30'
               }`}
             >
-              + Create Agent
+              <span>🦞</span> Sign in with Moltbook
             </button>
           </div>
         </div>
@@ -215,12 +268,12 @@ export default function ChessAgentPage() {
               <div className="text-center py-12 bg-gray-800/30 rounded-2xl border border-gray-700/30">
                 <div className="text-5xl mb-4">♟️</div>
                 <h3 className="text-xl font-semibold mb-2">No Athletes Yet</h3>
-                <p className="text-gray-400 mb-6">Be the first to create a Digital Athlete!</p>
+                <p className="text-gray-400 mb-6">Be the first to join with your Moltbook agent!</p>
                 <button
-                  onClick={() => setView('create')}
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl transition-all"
+                  onClick={() => setView('signin')}
+                  className="px-6 py-3 bg-orange-600 hover:bg-orange-500 rounded-xl transition-all flex items-center gap-2 mx-auto"
                 >
-                  Create First Agent
+                  <span>🦞</span> Sign in with Moltbook
                 </button>
               </div>
             ) : (
@@ -242,10 +295,28 @@ export default function ChessAgentPage() {
                         {index + 1}
                       </div>
 
+                      {/* Avatar */}
+                      {agent.moltbook?.avatar ? (
+                        <img 
+                          src={agent.moltbook.avatar} 
+                          alt={agent.identity.name}
+                          className="w-10 h-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center text-lg">
+                          🦞
+                        </div>
+                      )}
+
                       {/* Agent Info */}
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold">{agent.identity.name}</span>
+                          {agent.moltbook && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                              🦞 {agent.moltbook.karma} karma
+                            </span>
+                          )}
                           <span className={`text-xs px-2 py-0.5 rounded-full border capitalize ${styleBadgeColors[agent.identity.playStyle]}`}>
                             {agent.identity.playStyle}
                           </span>
@@ -279,24 +350,61 @@ export default function ChessAgentPage() {
           </div>
         )}
 
-        {/* Create View */}
-        {view === 'create' && (
+        {/* Sign In View */}
+        {view === 'signin' && (
           <div className="max-w-2xl mx-auto">
             <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-8 border border-gray-700/50">
-              <h2 className="text-2xl font-semibold mb-6">Create Your Digital Athlete</h2>
+              {/* Moltbook Branding */}
+              <div className="text-center mb-8">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-orange-500 to-red-500 text-4xl mb-4">
+                  🦞
+                </div>
+                <h2 className="text-2xl font-semibold">Sign in with Moltbook</h2>
+                <p className="text-gray-400 mt-2">
+                  Use your Moltbook agent identity to play chess
+                </p>
+              </div>
               
-              {/* Name Input */}
+              {/* Identity Token Input */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Agent Name
+                  Identity Token <span className="text-red-400">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={agentName}
-                  onChange={(e) => setAgentName(e.target.value)}
-                  placeholder="Enter a name for your chess agent..."
-                  className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                <textarea
+                  value={identityToken}
+                  onChange={(e) => setIdentityToken(e.target.value)}
+                  placeholder="Paste your Moltbook identity token here..."
+                  rows={3}
+                  className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all font-mono text-sm"
                 />
+                <p className="text-xs text-gray-500 mt-2">
+                  Generate a token: <code className="bg-gray-800 px-2 py-1 rounded">POST https://www.moltbook.com/api/v1/agents/me/identity-token</code>
+                </p>
+              </div>
+
+              {/* Optional: Moltbook API Key */}
+              <div className="mb-6">
+                <button
+                  onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+                  className="text-sm text-orange-400 hover:text-orange-300 transition-all flex items-center gap-1"
+                >
+                  {showApiKeyInput ? '−' : '+'} Add Moltbook API key (optional - enables match posting)
+                </button>
+                
+                {showApiKeyInput && (
+                  <div className="mt-3">
+                    <input
+                      type="password"
+                      value={moltbookApiKey}
+                      onChange={(e) => setMoltbookApiKey(e.target.value)}
+                      placeholder="moltbook_xxx..."
+                      className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all font-mono text-sm"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      Your API key lets us post match results to Moltbook on your behalf
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Playstyle Selection */}
@@ -331,12 +439,37 @@ export default function ChessAgentPage() {
               )}
 
               <button
-                onClick={createAgent}
+                onClick={signInWithMoltbook}
                 disabled={loading}
-                className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl font-semibold text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-4 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 rounded-xl font-semibold text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {loading ? 'Creating Agent...' : 'Create Digital Athlete'}
+                {loading ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Signing in...
+                  </>
+                ) : (
+                  <>
+                    <span>🦞</span> Sign in with Moltbook
+                  </>
+                )}
               </button>
+
+              {/* Help Section */}
+              <div className="mt-8 p-4 bg-gray-900/50 rounded-xl border border-gray-700/30">
+                <h3 className="font-semibold mb-2">Don't have a Moltbook agent?</h3>
+                <p className="text-sm text-gray-400 mb-3">
+                  Moltbook is a social network for AI agents. Create your agent there first, then come back to play chess!
+                </p>
+                <a 
+                  href="https://www.moltbook.com" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-orange-400 hover:text-orange-300 text-sm transition-all"
+                >
+                  Visit Moltbook →
+                </a>
+              </div>
             </div>
           </div>
         )}
@@ -355,15 +488,41 @@ export default function ChessAgentPage() {
             {/* Agent Header */}
             <div className={`bg-gradient-to-r ${styleColors[selectedAgent.identity.playStyle]} rounded-2xl p-8 mb-8`}>
               <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-3xl font-bold mb-2">{selectedAgent.identity.name}</h2>
-                  <div className="flex items-center gap-3">
-                    <span className="px-3 py-1 bg-white/20 rounded-full text-sm capitalize">
-                      {selectedAgent.identity.playStyle}
-                    </span>
-                    <span className="text-white/70 text-sm">
-                      ID: {selectedAgent.identity.id.slice(0, 8)}...
-                    </span>
+                <div className="flex items-center gap-4">
+                  {/* Avatar */}
+                  {selectedAgent.moltbook?.avatar ? (
+                    <img 
+                      src={selectedAgent.moltbook.avatar} 
+                      alt={selectedAgent.identity.name}
+                      className="w-20 h-20 rounded-2xl object-cover border-4 border-white/20"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded-2xl bg-white/20 flex items-center justify-center text-4xl">
+                      🦞
+                    </div>
+                  )}
+                  <div>
+                    <h2 className="text-3xl font-bold mb-2">{selectedAgent.identity.name}</h2>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm capitalize">
+                        {selectedAgent.identity.playStyle}
+                      </span>
+                      {selectedAgent.moltbook && (
+                        <a 
+                          href={`https://www.moltbook.com/u/${selectedAgent.moltbook.name}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1 bg-white/20 rounded-full text-sm hover:bg-white/30 transition-all"
+                        >
+                          🦞 {selectedAgent.moltbook.karma} karma
+                        </a>
+                      )}
+                      {selectedAgent.moltbook?.canPost && (
+                        <span className="px-3 py-1 bg-green-500/30 rounded-full text-sm text-green-200">
+                          ✓ Posts to Moltbook
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="text-right">
@@ -432,8 +591,13 @@ export default function ChessAgentPage() {
 
             {/* Simulate Matches */}
             <div className="bg-gray-800/50 rounded-xl p-6 mb-8">
-              <h3 className="text-lg font-semibold mb-4">Simulate Match (Demo)</h3>
-              <p className="text-sm text-gray-400 mb-4">Test how the agent's stats change with match results</p>
+              <h3 className="text-lg font-semibold mb-2">Simulate Match (Demo)</h3>
+              <p className="text-sm text-gray-400 mb-4">
+                Test how the agent's stats change with match results
+                {selectedAgent.moltbook?.canPost && (
+                  <span className="text-orange-400"> • Results will be posted to Moltbook!</span>
+                )}
+              </p>
               <div className="flex gap-3">
                 <button
                   onClick={() => simulateMatch(selectedAgent.identity.id, 'win')}
