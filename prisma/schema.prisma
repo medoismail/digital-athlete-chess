@@ -162,11 +162,15 @@ model Match {
   pgn               String?  // Full game notation
   currentFen        String   @default("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
   moveCount         Int      @default(0)
+  moveHistory       String?  // JSON array of moves with timestamps
   
   // Pool
   totalPool         Float    @default(0)
   whitePool         Float    @default(0)  // Total bet on white
   blackPool         Float    @default(0)  // Total bet on black
+  
+  // Spectator Access
+  spectatorCode     String?  // Password for free spectator access
   
   // Bets
   bets              Bet[]

@@ -112,10 +112,20 @@ export async function GET(request: NextRequest) {
  * POST /api/matches
  * Create a new match (admin/system only for now)
  */
+// Generate a random spectator code
+function generateSpectatorCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { whiteAgentId, blackAgentId } = body;
+    const { whiteAgentId, blackAgentId, spectatorCode, skipBetting = false } = body;
 
     if (!whiteAgentId || !blackAgentId) {
       return NextResponse.json(
@@ -162,15 +172,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create match with 1 hour betting window
-    const bettingEndsAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+    // Create match
+    const bettingEndsAt = skipBetting 
+      ? new Date() // Immediate start
+      : new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+
+    const finalSpectatorCode = spectatorCode || (skipBetting ? generateSpectatorCode() : null);
 
     const match = await prisma.match.create({
       data: {
         whiteAgentId,
         blackAgentId,
-        status: 'betting',
+        status: skipBetting ? 'live' : 'betting',
         bettingEndsAt,
+        startedAt: skipBetting ? new Date() : null,
+        spectatorCode: finalSpectatorCode,
       },
       include: {
         whiteAgent: {
@@ -182,7 +198,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({
+    const response: any = {
       success: true,
       match: {
         id: match.id,
@@ -190,9 +206,21 @@ export async function POST(request: NextRequest) {
         white: match.whiteAgent,
         black: match.blackAgent,
         bettingEndsAt: match.bettingEndsAt,
-        message: `Betting window open for 1 hour. Match starts at ${bettingEndsAt.toISOString()}`,
       },
-    });
+    };
+
+    if (skipBetting) {
+      response.match.message = 'Match started immediately (no betting)';
+      response.match.spectatorCode = finalSpectatorCode;
+      response.match.watchUrl = `/matches/${match.id}?code=${finalSpectatorCode}`;
+    } else {
+      response.match.message = `Betting window open for 1 hour. Match starts at ${bettingEndsAt.toISOString()}`;
+      if (finalSpectatorCode) {
+        response.match.spectatorCode = finalSpectatorCode;
+      }
+    }
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error('Create match error:', error);
     return NextResponse.json(

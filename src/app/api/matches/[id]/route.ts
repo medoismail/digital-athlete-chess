@@ -77,6 +77,12 @@ export async function GET(
       ? match.bets.some(b => b.bettorAddress.toLowerCase() === bettorAddress.toLowerCase())
       : false;
 
+    // Check spectator code
+    const spectatorCode = searchParams.get('code');
+    const hasSpectatorAccess = spectatorCode && match.spectatorCode 
+      ? spectatorCode === match.spectatorCode 
+      : false;
+
     // Match is completed - everyone can see full details
     const isCompleted = match.status === 'completed';
 
@@ -136,16 +142,26 @@ export async function GET(
       },
       access: {
         isBettor,
-        canViewLive: isBettor || isCompleted,
+        hasSpectatorAccess,
+        canViewLive: isBettor || isCompleted || hasSpectatorAccess,
       },
     };
 
-    // Add game data if bettor or completed
-    if (isBettor || isCompleted) {
+    // Add game data if bettor, spectator, or completed
+    if (isBettor || isCompleted || hasSpectatorAccess) {
+      // Parse move history
+      let moveHistory: any[] = [];
+      try {
+        moveHistory = (match as any).moveHistory ? JSON.parse((match as any).moveHistory) : [];
+      } catch {
+        moveHistory = [];
+      }
+
       response.match.game = {
         currentFen: match.currentFen,
         moveCount: match.moveCount,
         pgn: match.pgn,
+        moveHistory,
       };
       
       // Add recent bets (anonymized amounts)

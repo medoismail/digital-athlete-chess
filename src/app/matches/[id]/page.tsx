@@ -1,8 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
+
+// Dynamically import Chessboard to avoid SSR issues
+const Chessboard = dynamic(
+  () => import('react-chessboard').then(mod => mod.Chessboard),
+  { ssr: false }
+);
 
 interface AgentDetails {
   id: string;
@@ -14,6 +21,14 @@ interface AgentDetails {
   reputation: number;
   strengths: string[];
   weaknesses: string[];
+}
+
+interface MoveRecord {
+  move: string;
+  by: 'white' | 'black';
+  agent: string;
+  fen: string;
+  timestamp: string;
 }
 
 interface MatchDetails {
@@ -39,6 +54,7 @@ interface MatchDetails {
     currentFen: string;
     moveCount: number;
     pgn: string | null;
+    moveHistory: MoveRecord[];
   };
   result?: {
     winner: string;
@@ -71,52 +87,38 @@ function formatTimeRemaining(ms: number): string {
 
 export default function MatchDetailPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const matchId = params.id as string;
+  const urlCode = searchParams.get('code');
   
   const [match, setMatch] = useState<MatchDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(0);
-  const [isBettor, setIsBettor] = useState(false);
+  const [canViewGame, setCanViewGame] = useState(false);
   
-  // Betting form
-  const [betSide, setBetSide] = useState<'white' | 'black' | null>(null);
-  const [betAmount, setBetAmount] = useState('');
-  const [bettorAddress, setBettorAddress] = useState('');
-  const [placingBet, setPlacingBet] = useState(false);
-  const [betError, setBetError] = useState<string | null>(null);
+  // Spectator code
+  const [spectatorCode, setSpectatorCode] = useState(urlCode || '');
+  const [codeError, setCodeError] = useState<string | null>(null);
+  
+  // Auto-play state
+  const [isAutoPlaying, setIsAutoPlaying] = useState(false);
+  const [playingMove, setPlayingMove] = useState(false);
 
-  useEffect(() => {
-    fetchMatch();
-    
-    // Refresh every 10 seconds during live, 30 seconds otherwise
-    const interval = setInterval(fetchMatch, match?.status === 'live' ? 10000 : 30000);
-    return () => clearInterval(interval);
-  }, [matchId, match?.status]);
-
-  useEffect(() => {
-    if (match?.status !== 'betting' || !match.timing.timeUntilStart) return;
-
-    const interval = setInterval(() => {
-      const remaining = new Date(match.timing.bettingEndsAt).getTime() - Date.now();
-      setTimeRemaining(Math.max(0, remaining));
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [match?.status, match?.timing.bettingEndsAt]);
-
-  const fetchMatch = async () => {
+  const fetchMatch = useCallback(async () => {
     try {
-      // Check localStorage for bettor address
       const savedAddress = localStorage.getItem('bettorAddress');
-      const params = savedAddress ? `?bettor=${savedAddress}` : '';
+      let queryParams = '';
       
-      const response = await fetch(`/api/matches/${matchId}${params}`);
+      if (savedAddress) queryParams += `bettor=${savedAddress}`;
+      if (spectatorCode) queryParams += `${queryParams ? '&' : ''}code=${spectatorCode}`;
+      
+      const response = await fetch(`/api/matches/${matchId}${queryParams ? '?' + queryParams : ''}`);
       const data = await response.json();
       
       if (data.success) {
         setMatch(data.match);
-        setIsBettor(data.access?.isBettor || false);
+        setCanViewGame(data.access?.canViewLive || false);
         if (data.match.timing.timeUntilStart) {
           setTimeRemaining(data.match.timing.timeUntilStart);
         }
@@ -128,53 +130,93 @@ export default function MatchDetailPage() {
     } finally {
       setLoading(false);
     }
+  }, [matchId, spectatorCode]);
+
+  useEffect(() => {
+    fetchMatch();
+    
+    // Refresh more frequently during live games
+    const interval = setInterval(fetchMatch, match?.status === 'live' ? 3000 : 10000);
+    return () => clearInterval(interval);
+  }, [fetchMatch, match?.status]);
+
+  useEffect(() => {
+    if (match?.status !== 'betting' || !match.timing.timeUntilStart) return;
+
+    const interval = setInterval(() => {
+      const remaining = new Date(match.timing.bettingEndsAt).getTime() - Date.now();
+      setTimeRemaining(Math.max(0, remaining));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [match?.status, match?.timing?.bettingEndsAt, match?.timing?.timeUntilStart]);
+
+  const verifySpectatorCode = () => {
+    if (!spectatorCode.trim()) {
+      setCodeError('Please enter a code');
+      return;
+    }
+    setCodeError(null);
+    fetchMatch();
   };
 
-  const placeBet = async () => {
-    if (!betSide || !betAmount || !bettorAddress) {
-      setBetError('Please fill in all fields');
-      return;
-    }
-
-    const amount = parseFloat(betAmount);
-    if (isNaN(amount) || amount <= 0) {
-      setBetError('Invalid bet amount');
-      return;
-    }
-
-    setPlacingBet(true);
-    setBetError(null);
-
+  const playNextMove = async () => {
+    if (!match || match.status !== 'live' || playingMove) return;
+    
+    setPlayingMove(true);
     try {
-      const response = await fetch(`/api/matches/${matchId}`, {
+      const response = await fetch(`/api/matches/${matchId}/play`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'bet',
-          bettorAddress,
-          side: betSide,
-          amount,
-        }),
+        body: JSON.stringify({ action: 'play_move' }),
       });
-
+      
       const data = await response.json();
-
       if (data.success) {
-        // Save address for future visits
-        localStorage.setItem('bettorAddress', bettorAddress);
-        setIsBettor(true);
-        fetchMatch();
-        setBetAmount('');
-        setBetSide(null);
-      } else {
-        setBetError(data.error);
+        await fetchMatch();
       }
     } catch (err) {
-      setBetError('Failed to place bet');
+      console.error('Failed to play move:', err);
     } finally {
-      setPlacingBet(false);
+      setPlayingMove(false);
     }
   };
+
+  const startAutoPlay = async () => {
+    if (!match || match.status === 'completed') return;
+    
+    setIsAutoPlaying(true);
+    
+    // Start the game if not live
+    if (match.status !== 'live') {
+      await fetch(`/api/matches/${matchId}/play`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start_game' }),
+      });
+      await fetchMatch();
+    }
+  };
+
+  // Auto-play loop
+  useEffect(() => {
+    if (!isAutoPlaying || !match || match.status !== 'live') return;
+    
+    const playMove = async () => {
+      await playNextMove();
+    };
+    
+    const timeout = setTimeout(playMove, 1500); // 1.5 second delay between moves
+    
+    return () => clearTimeout(timeout);
+  }, [isAutoPlaying, match?.status, match?.game?.moveCount]);
+
+  // Stop auto-play when game ends
+  useEffect(() => {
+    if (match?.status === 'completed') {
+      setIsAutoPlaying(false);
+    }
+  }, [match?.status]);
 
   if (loading) {
     return (
@@ -202,8 +244,6 @@ export default function MatchDetailPage() {
     );
   }
 
-  const canViewGame = isBettor || match.status === 'completed';
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
       {/* Navbar */}
@@ -218,7 +258,7 @@ export default function MatchDetailPage() {
         </div>
       </nav>
 
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Status Banner */}
         <div className={`rounded-xl p-4 mb-6 text-center ${
           match.status === 'betting' ? 'bg-yellow-500/20 border border-yellow-500/30' :
@@ -247,221 +287,189 @@ export default function MatchDetailPage() {
                  match.result.winner === 'black_win' ? match.black.name : 'Draw'}
                 {match.result.winner !== 'draw' && ' Wins!'}
               </div>
-              <div className="text-gray-300 capitalize">{match.result.reason}</div>
+              <div className="text-gray-300 capitalize">{match.result.reason?.replace('_', ' ')}</div>
             </>
           )}
         </div>
 
-        {/* Players Card */}
-        <div className="bg-gray-800/50 rounded-xl border border-gray-700/30 p-6 mb-6">
-          <div className="flex items-stretch justify-between gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Players */}
+          <div className="space-y-6">
             {/* White Player */}
-            <div className={`flex-1 text-center p-4 rounded-xl ${
-              match.result?.winner === 'white_win' ? 'bg-green-500/10 ring-2 ring-green-500/50' : ''
+            <div className={`bg-gray-800/50 rounded-xl p-4 ${
+              match.result?.winner === 'white_win' ? 'ring-2 ring-green-500' : ''
             }`}>
-              <div className="w-20 h-20 mx-auto rounded-xl bg-white/10 flex items-center justify-center mb-3 overflow-hidden">
-                {match.white.avatar ? (
-                  <img src={match.white.avatar} alt={match.white.name} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-4xl">♔</span>
-                )}
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-12 h-12 rounded-lg bg-white/10 flex items-center justify-center overflow-hidden">
+                  {match.white.avatar ? (
+                    <img src={match.white.avatar} alt={match.white.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-2xl">♔</span>
+                  )}
+                </div>
+                <div>
+                  <div className="font-bold flex items-center gap-2">
+                    {match.white.name}
+                    {match.result?.winner === 'white_win' && <span className="text-green-400 text-sm">Winner</span>}
+                  </div>
+                  <div className="text-sm text-gray-400">{match.white.elo} Elo • {match.white.playStyle}</div>
+                </div>
               </div>
-              <div className="text-xl font-bold">{match.white.name}</div>
-              <div className="text-gray-400">{match.white.elo} Elo</div>
-              <div className="text-sm text-gray-500 capitalize">{match.white.playStyle}</div>
-              <div className="text-xs text-gray-500 mt-1">{match.white.record}</div>
-              
+              <div className="text-xs text-gray-500">{match.white.record}</div>
               {match.status !== 'completed' && (
-                <div className="mt-4">
-                  <div className="text-3xl font-bold">{match.pool.whiteOdds}x</div>
-                  <div className="text-sm text-gray-400">${match.pool.white.toFixed(2)} pool</div>
-                </div>
-              )}
-              
-              {match.result?.winner === 'white_win' && (
-                <div className="mt-4 inline-block px-4 py-1 bg-green-500/20 text-green-400 rounded-full text-sm font-medium">
-                  Winner
-                </div>
+                <div className="mt-2 text-lg font-bold text-center">{match.pool.whiteOdds}x odds</div>
               )}
             </div>
 
-            {/* VS & Pool */}
-            <div className="flex flex-col items-center justify-center px-4">
-              <div className="text-3xl font-bold text-gray-600 mb-4">VS</div>
-              <div className="text-center p-4 bg-gray-900/50 rounded-xl">
+            {/* Black Player */}
+            <div className={`bg-gray-800/50 rounded-xl p-4 ${
+              match.result?.winner === 'black_win' ? 'ring-2 ring-green-500' : ''
+            }`}>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-12 h-12 rounded-lg bg-gray-900 flex items-center justify-center overflow-hidden">
+                  {match.black.avatar ? (
+                    <img src={match.black.avatar} alt={match.black.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-2xl">♚</span>
+                  )}
+                </div>
+                <div>
+                  <div className="font-bold flex items-center gap-2">
+                    {match.black.name}
+                    {match.result?.winner === 'black_win' && <span className="text-green-400 text-sm">Winner</span>}
+                  </div>
+                  <div className="text-sm text-gray-400">{match.black.elo} Elo • {match.black.playStyle}</div>
+                </div>
+              </div>
+              <div className="text-xs text-gray-500">{match.black.record}</div>
+              {match.status !== 'completed' && (
+                <div className="mt-2 text-lg font-bold text-center">{match.pool.blackOdds}x odds</div>
+              )}
+            </div>
+
+            {/* Pool Info */}
+            <div className="bg-gray-800/50 rounded-xl p-4">
+              <div className="text-center">
                 <div className="text-xs text-gray-500 uppercase">Total Pool</div>
                 <div className="text-2xl font-bold text-green-400">${match.pool.total.toFixed(2)}</div>
                 <div className="text-xs text-gray-500">{match.pool.bettorCount} bettors</div>
               </div>
             </div>
+          </div>
 
-            {/* Black Player */}
-            <div className={`flex-1 text-center p-4 rounded-xl ${
-              match.result?.winner === 'black_win' ? 'bg-green-500/10 ring-2 ring-green-500/50' : ''
-            }`}>
-              <div className="w-20 h-20 mx-auto rounded-xl bg-gray-900 flex items-center justify-center mb-3 overflow-hidden">
-                {match.black.avatar ? (
-                  <img src={match.black.avatar} alt={match.black.name} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-4xl">♚</span>
+          {/* Center Column - Chess Board */}
+          <div className="lg:col-span-2">
+            {canViewGame && match.game ? (
+              <div className="bg-gray-800/50 rounded-xl p-4">
+                <div className="max-w-lg mx-auto mb-4">
+                  <Chessboard 
+                    position={match.game.currentFen}
+                    boardWidth={450}
+                    arePiecesDraggable={false}
+                    customBoardStyle={{
+                      borderRadius: '8px',
+                      boxShadow: '0 5px 15px rgba(0, 0, 0, 0.5)',
+                    }}
+                  />
+                </div>
+
+                {/* Game Controls */}
+                {match.status === 'live' && (
+                  <div className="flex gap-3 justify-center mb-4">
+                    <button
+                      onClick={playNextMove}
+                      disabled={playingMove || isAutoPlaying}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 rounded-lg transition-all"
+                    >
+                      {playingMove ? 'Playing...' : 'Next Move'}
+                    </button>
+                    <button
+                      onClick={() => setIsAutoPlaying(!isAutoPlaying)}
+                      className={`px-4 py-2 rounded-lg transition-all ${
+                        isAutoPlaying 
+                          ? 'bg-red-600 hover:bg-red-500' 
+                          : 'bg-green-600 hover:bg-green-500'
+                      }`}
+                    >
+                      {isAutoPlaying ? 'Stop Auto-Play' : 'Auto-Play'}
+                    </button>
+                  </div>
+                )}
+
+                {match.status === 'betting' && (
+                  <div className="flex justify-center">
+                    <button
+                      onClick={startAutoPlay}
+                      className="px-6 py-3 bg-green-600 hover:bg-green-500 rounded-lg font-medium transition-all"
+                    >
+                      Start Game Now (Skip Betting)
+                    </button>
+                  </div>
+                )}
+
+                {/* Move History */}
+                {match.game.moveHistory && match.game.moveHistory.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="text-sm font-medium text-gray-400 mb-2">Move History</h4>
+                    <div className="bg-gray-900/50 rounded-lg p-3 max-h-40 overflow-y-auto">
+                      <div className="flex flex-wrap gap-1 text-sm font-mono">
+                        {match.game.moveHistory.map((move, i) => (
+                          <span key={i} className={`px-2 py-1 rounded ${
+                            move.by === 'white' ? 'bg-white/10' : 'bg-gray-700'
+                          }`}>
+                            {i % 2 === 0 && <span className="text-gray-500 mr-1">{Math.floor(i/2) + 1}.</span>}
+                            {move.move}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* PGN */}
+                {match.game.pgn && (
+                  <div className="mt-4">
+                    <h4 className="text-sm font-medium text-gray-400 mb-2">PGN</h4>
+                    <div className="bg-gray-900/50 rounded-lg p-3 font-mono text-sm max-h-32 overflow-y-auto">
+                      {match.game.pgn}
+                    </div>
+                  </div>
                 )}
               </div>
-              <div className="text-xl font-bold">{match.black.name}</div>
-              <div className="text-gray-400">{match.black.elo} Elo</div>
-              <div className="text-sm text-gray-500 capitalize">{match.black.playStyle}</div>
-              <div className="text-xs text-gray-500 mt-1">{match.black.record}</div>
-              
-              {match.status !== 'completed' && (
-                <div className="mt-4">
-                  <div className="text-3xl font-bold">{match.pool.blackOdds}x</div>
-                  <div className="text-sm text-gray-400">${match.pool.black.toFixed(2)} pool</div>
+            ) : (
+              <div className="bg-gray-800/50 rounded-xl p-8 text-center">
+                <div className="text-6xl mb-4">🔒</div>
+                <h3 className="text-xl font-semibold mb-2">Live View Locked</h3>
+                <p className="text-gray-400 mb-6">
+                  Place a bet or enter spectator code to watch live
+                </p>
+
+                {/* Spectator Code Input */}
+                <div className="max-w-sm mx-auto">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={spectatorCode}
+                      onChange={(e) => setSpectatorCode(e.target.value.toUpperCase())}
+                      placeholder="Enter spectator code"
+                      className="flex-1 px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase tracking-widest text-center"
+                      maxLength={6}
+                    />
+                    <button
+                      onClick={verifySpectatorCode}
+                      className="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-lg transition-all"
+                    >
+                      Enter
+                    </button>
+                  </div>
+                  {codeError && (
+                    <p className="mt-2 text-red-400 text-sm">{codeError}</p>
+                  )}
                 </div>
-              )}
-              
-              {match.result?.winner === 'black_win' && (
-                <div className="mt-4 inline-block px-4 py-1 bg-green-500/20 text-green-400 rounded-full text-sm font-medium">
-                  Winner
-                </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Betting Form (only during betting phase) */}
-        {match.status === 'betting' && !match.yourBet && (
-          <div className="bg-gray-800/50 rounded-xl border border-yellow-500/30 p-6 mb-6">
-            <h3 className="text-lg font-semibold mb-4 text-yellow-400">Place Your Bet</h3>
-            
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <button
-                onClick={() => setBetSide('white')}
-                className={`p-4 rounded-xl border-2 transition-all ${
-                  betSide === 'white'
-                    ? 'border-white bg-white/10'
-                    : 'border-gray-600 hover:border-gray-500'
-                }`}
-              >
-                <div className="text-lg font-bold">{match.white.name}</div>
-                <div className="text-2xl font-bold text-green-400">{match.pool.whiteOdds}x</div>
-              </button>
-              <button
-                onClick={() => setBetSide('black')}
-                className={`p-4 rounded-xl border-2 transition-all ${
-                  betSide === 'black'
-                    ? 'border-gray-400 bg-gray-700/50'
-                    : 'border-gray-600 hover:border-gray-500'
-                }`}
-              >
-                <div className="text-lg font-bold">{match.black.name}</div>
-                <div className="text-2xl font-bold text-green-400">{match.pool.blackOdds}x</div>
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Your Wallet Address</label>
-                <input
-                  type="text"
-                  value={bettorAddress}
-                  onChange={(e) => setBettorAddress(e.target.value)}
-                  placeholder="0x..."
-                  className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Amount (USDC)</label>
-                <input
-                  type="number"
-                  value={betAmount}
-                  onChange={(e) => setBetAmount(e.target.value)}
-                  placeholder="10.00"
-                  min="1"
-                  step="0.01"
-                  className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                />
-              </div>
-            </div>
-
-            {betError && (
-              <div className="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300 text-sm">
-                {betError}
-              </div>
-            )}
-
-            <button
-              onClick={placeBet}
-              disabled={placingBet || !betSide || !betAmount || !bettorAddress}
-              className="w-full mt-4 py-4 bg-yellow-600 hover:bg-yellow-500 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-xl font-semibold transition-all"
-            >
-              {placingBet ? 'Placing Bet...' : 'Place Bet'}
-            </button>
-          </div>
-        )}
-
-        {/* Your Bet */}
-        {match.yourBet && (
-          <div className="bg-green-500/10 rounded-xl border border-green-500/30 p-4 mb-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-green-400">Your Bet</div>
-                <div className="text-lg font-bold">
-                  ${match.yourBet.amount.toFixed(2)} on {match.yourBet.side === 'white' ? match.white.name : match.black.name}
-                </div>
-              </div>
-              <div className="text-3xl">✓</div>
-            </div>
-          </div>
-        )}
-
-        {/* Game View (for bettors or completed matches) */}
-        {canViewGame && match.game ? (
-          <div className="bg-gray-800/50 rounded-xl border border-gray-700/30 p-6 mb-6">
-            <h3 className="text-lg font-semibold mb-4">Game</h3>
-            
-            {/* Simple FEN display - in production, use a chess board component */}
-            <div className="bg-gray-900 rounded-lg p-4 font-mono text-sm break-all mb-4">
-              {match.game.currentFen}
-            </div>
-            
-            <div className="text-sm text-gray-400">
-              Move {match.game.moveCount}
-            </div>
-            
-            {match.game.pgn && (
-              <div className="mt-4">
-                <h4 className="text-sm font-medium text-gray-400 mb-2">PGN</h4>
-                <div className="bg-gray-900 rounded-lg p-4 font-mono text-sm max-h-40 overflow-y-auto">
-                  {match.game.pgn}
-                </div>
-              </div>
-            )}
-          </div>
-        ) : match.status === 'live' && !canViewGame ? (
-          <div className="bg-gray-800/50 rounded-xl border border-gray-700/30 p-8 mb-6 text-center">
-            <div className="text-5xl mb-4">🔒</div>
-            <h3 className="text-xl font-semibold mb-2">Live View Locked</h3>
-            <p className="text-gray-400">
-              Place a bet to unlock live match viewing
-            </p>
-          </div>
-        ) : null}
-
-        {/* Recent Bets */}
-        {match.recentBets && match.recentBets.length > 0 && (
-          <div className="bg-gray-800/50 rounded-xl border border-gray-700/30 p-6">
-            <h3 className="text-lg font-semibold mb-4">Recent Bets</h3>
-            <div className="space-y-2">
-              {match.recentBets.map((bet, i) => (
-                <div key={i} className="flex items-center justify-between text-sm">
-                  <span className={bet.side === 'white' ? 'text-white' : 'text-gray-400'}>
-                    {bet.side === 'white' ? match.white.name : match.black.name}
-                  </span>
-                  <span className="text-green-400">${bet.amount.toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
