@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Agent {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  walletAddress String? @unique
+  apiKey      String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  images      Image[]
+  payments    Payment[]
+  
+  // Stats
+  totalImages Int      @default(0)
+  totalSpent  Float    @default(0)
+  
+  // Claimed by human
+  claimedBy   String?
+  claimedAt   DateTime?
+}
+
+model Image {
+  id          String   @id @default(uuid())
+  prompt      String
+  style       String   @default("pfp")
+  imageUrl    String
+  thumbnailUrl String?
+  
+  // Metadata
+  width       Int      @default(512)
+  height      Int      @default(512)
+  
+  // Relations
+  agentId     String
+  agent       Agent    @relation(fields: [agentId], references: [id])
+  
+  // Payment
+  paymentId   String?  @unique
+  payment     Payment? @relation(fields: [paymentId], references: [id])
+  
+  // Social
+  likes       Int      @default(0)
+  views       Int      @default(0)
+  featured    Boolean  @default(false)
+  
+  createdAt   DateTime @default(now())
+  
+  // Tags for discovery
+  tags        String?  // JSON array stored as string
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  agentId       String
+  agent         Agent    @relation(fields: [agentId], references: [id])
+  
+  // x402 Payment details
+  amount        Float    // in USDC
+  currency      String   @default("USDC")
+  chain         String   @default("base")
+  txHash        String?
+  receipt       String?  // x402 receipt
+  
+  // Status
+  status        String   @default("pending") // pending, completed, failed
+  
+  // What was purchased
+  image         Image?
+  
+  createdAt     DateTime @default(now())
+  completedAt   DateTime?
+}
+
+model FeaturedGallery {
+  id          String   @id @default(uuid())
+  imageId     String
+  position    Int
+  createdAt   DateTime @default(now())
+}
+
+// Digital Athlete Chess Agent
+model ChessAgent {
+  id                String   @id @default(uuid())
+  name              String
+  playStyle         String   // aggressive, positional, defensive, tactical, endgame-oriented
+  
+  // Stats
+  elo               Int      @default(1500)
+  gamesPlayed       Int      @default(0)
+  wins              Int      @default(0)
+  losses            Int      @default(0)
+  draws             Int      @default(0)
+  winRate           Float    @default(0)
+  currentStreak     Int      @default(0)
+  longestWinStreak  Int      @default(0)
+  reputationScore   Int      @default(50)
+  
+  // Identity
+  preferredOpeningsWhite String[] @default([])
+  preferredOpeningsBlack String[] @default([])
+  strengths         String[] @default([])
+  weaknesses        String[] @default([])
+  
+  // Learning
+  learningNotes     String[] @default([])
+  
+  // Match history stored as JSON
+  matchHistory      Json     @default("[]")
+  
+  // Ownership
+  ownerAddress      String?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
