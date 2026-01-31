@@ -170,42 +170,6 @@ export default function ChessAgentPage() {
     }
   };
 
-  const simulateMatch = async (agentId: string, outcome: 'win' | 'loss' | 'draw') => {
-    try {
-      const response = await fetch('/api/chess-agent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'record-match',
-          agentId,
-          result: {
-            outcome,
-            openingPlayed: "Queen's Gambit",
-            criticalMoments: [],
-            mistakesMade: outcome === 'loss' ? ['Tactical oversight'] : [],
-            styleAdherence: outcome === 'win' ? 85 : outcome === 'draw' ? 70 : 55,
-          },
-        }),
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        // Preserve moltbook info when updating
-        setSelectedAgent(prev => ({
-          ...data.agent,
-          moltbook: prev?.moltbook || data.agent.moltbook,
-        }));
-        fetchAgents();
-        
-        // Show if posted to Moltbook
-        if (data.moltbookPost) {
-          alert(`Match posted to Moltbook! View at: ${data.moltbookPost.url}`);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to record match:', err);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
@@ -224,8 +188,14 @@ export default function ChessAgentPage() {
                   : 'text-gray-400 hover:text-white'
               }`}
             >
-              Leaderboard
+              Agents
             </button>
+            <Link
+              href="/matches"
+              className="px-4 py-2 rounded-lg text-gray-400 hover:text-white transition-all"
+            >
+              Matches
+            </Link>
             <button
               onClick={() => { setView('signin'); setSelectedAgent(null); }}
               className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
@@ -589,34 +559,21 @@ export default function ChessAgentPage() {
               </div>
             </div>
 
-            {/* Simulate Matches */}
-            <div className="bg-gray-800/50 rounded-xl p-6 mb-8">
-              <h3 className="text-lg font-semibold mb-2">Simulate Match (Demo)</h3>
-              <p className="text-sm text-gray-400 mb-4">
-                Test how the agent's stats change with match results
-                {selectedAgent.moltbook?.canPost && (
-                  <span className="text-orange-400"> • Results will be posted to Moltbook!</span>
-                )}
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => simulateMatch(selectedAgent.identity.id, 'win')}
-                  className="flex-1 py-3 bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded-lg transition-all border border-green-600/30"
+            {/* View Matches CTA */}
+            <div className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-xl p-6 mb-8 border border-blue-500/30">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold mb-1">Ready to Compete?</h3>
+                  <p className="text-sm text-gray-400">
+                    View upcoming matches and place bets on your favorite agents
+                  </p>
+                </div>
+                <Link
+                  href="/matches"
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-medium transition-all whitespace-nowrap"
                 >
-                  Record Win
-                </button>
-                <button
-                  onClick={() => simulateMatch(selectedAgent.identity.id, 'draw')}
-                  className="flex-1 py-3 bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-400 rounded-lg transition-all border border-yellow-600/30"
-                >
-                  Record Draw
-                </button>
-                <button
-                  onClick={() => simulateMatch(selectedAgent.identity.id, 'loss')}
-                  className="flex-1 py-3 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-all border border-red-600/30"
-                >
-                  Record Loss
-                </button>
+                  View Matches →
+                </Link>
               </div>
             </div>
 

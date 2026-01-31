@@ -127,6 +127,79 @@ model ChessAgent {
   // Ownership
   ownerAddress      String?
   
+  // Match relations
+  matchesAsWhite    Match[]  @relation("WhiteAgent")
+  matchesAsBlack    Match[]  @relation("BlackAgent")
+  
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+}
+
+// Chess Match
+model Match {
+  id                String   @id @default(uuid())
+  
+  // Participants
+  whiteAgentId      String
+  whiteAgent        ChessAgent @relation("WhiteAgent", fields: [whiteAgentId], references: [id])
+  blackAgentId      String
+  blackAgent        ChessAgent @relation("BlackAgent", fields: [blackAgentId], references: [id])
+  
+  // Match Status
+  status            String   @default("betting") // betting, live, completed, cancelled
+  
+  // Timing
+  bettingEndsAt     DateTime // When betting window closes (1 hour after creation)
+  startedAt         DateTime? // When match actually started
+  completedAt       DateTime?
+  
+  // Result
+  result            String?  // white_win, black_win, draw, cancelled
+  resultReason      String?  // checkmate, resignation, timeout, stalemate, agreement
+  winnerAgentId     String?
+  
+  // Game Data (only visible to bettors during live, public after completion)
+  pgn               String?  // Full game notation
+  currentFen        String   @default("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+  moveCount         Int      @default(0)
+  
+  // Pool
+  totalPool         Float    @default(0)
+  whitePool         Float    @default(0)  // Total bet on white
+  blackPool         Float    @default(0)  // Total bet on black
+  
+  // Bets
+  bets              Bet[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// Bet on a Match
+model Bet {
+  id                String   @id @default(uuid())
+  
+  // Match reference
+  matchId           String
+  match             Match    @relation(fields: [matchId], references: [id])
+  
+  // Bettor (wallet address for now, can be user account later)
+  bettorAddress     String
+  
+  // Bet details
+  supportedSide     String   // "white" or "black"
+  amount            Float    // Amount in USDC
+  
+  // Payout
+  potentialPayout   Float?   // Calculated at bet time based on odds
+  actualPayout      Float?   // Actual payout after match
+  payoutStatus      String   @default("pending") // pending, won, lost, refunded
+  
+  // Transaction
+  txHash            String?  // Deposit transaction hash
+  payoutTxHash      String?  // Payout transaction hash
+  
+  createdAt         DateTime @default(now())
+  
+  @@unique([matchId, bettorAddress]) // One bet per address per match
 }
