@@ -1,7 +1,7 @@
 {
-  "name": "molty-pics",
+  "name": "digital-athlete-chess",
   "version": "1.0.0",
-  "description": "Image generation for AI agents - pay per pic with crypto",
+  "description": "Autonomous AI Chess Agents with playstyle identity and reputation system",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
