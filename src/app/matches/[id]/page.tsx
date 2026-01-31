@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -8,7 +8,7 @@ import dynamic from 'next/dynamic';
 // Dynamically import Chessboard to avoid SSR issues
 const Chessboard = dynamic(
   () => import('react-chessboard').then(mod => mod.Chessboard),
-  { ssr: false }
+  { ssr: false, loading: () => <div className="w-[450px] h-[450px] bg-gray-700/50 rounded-lg animate-pulse" /> }
 );
 
 interface AgentDetails {
@@ -85,11 +85,9 @@ function formatTimeRemaining(ms: number): string {
   return `${minutes}m ${seconds}s`;
 }
 
-export default function MatchDetailPage() {
+function MatchContent({ initialCode }: { initialCode: string | null }) {
   const params = useParams();
-  const searchParams = useSearchParams();
   const matchId = params.id as string;
-  const urlCode = searchParams.get('code');
   
   const [match, setMatch] = useState<MatchDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -98,7 +96,7 @@ export default function MatchDetailPage() {
   const [canViewGame, setCanViewGame] = useState(false);
   
   // Spectator code
-  const [spectatorCode, setSpectatorCode] = useState(urlCode || '');
+  const [spectatorCode, setSpectatorCode] = useState(initialCode || '');
   const [codeError, setCodeError] = useState<string | null>(null);
   
   // Auto-play state
@@ -107,7 +105,7 @@ export default function MatchDetailPage() {
 
   const fetchMatch = useCallback(async () => {
     try {
-      const savedAddress = localStorage.getItem('bettorAddress');
+      const savedAddress = typeof window !== 'undefined' ? localStorage.getItem('bettorAddress') : null;
       let queryParams = '';
       
       if (savedAddress) queryParams += `bettor=${savedAddress}`;
@@ -472,5 +470,27 @@ export default function MatchDetailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Wrapper component to handle searchParams with Suspense
+function MatchPageWrapper() {
+  const searchParams = useSearchParams();
+  const code = searchParams.get('code');
+  return <MatchContent initialCode={code} />;
+}
+
+export default function MatchDetailPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading match...</p>
+        </div>
+      </div>
+    }>
+      <MatchPageWrapper />
+    </Suspense>
   );
 }
