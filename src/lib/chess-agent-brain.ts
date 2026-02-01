@@ -11,6 +11,12 @@ export interface AgentPersonality {
   elo: number;
   strengths: string[];
   weaknesses: string[];
+  // Training scores (0-100)
+  tacticalScore?: number;
+  positionalScore?: number;
+  endgameScore?: number;
+  openingScore?: number;
+  trainingLevel?: string;
 }
 
 export interface ThinkingProcess {
@@ -82,10 +88,19 @@ const PIECE_VALUES: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 
 export class ChessAgentBrain {
   private personality: AgentPersonality;
   private traits: typeof PLAYSTYLE_TRAITS.aggressive;
+  private trainingBonus: number;
 
   constructor(personality: AgentPersonality) {
     this.personality = personality;
     this.traits = PLAYSTYLE_TRAITS[personality.playStyle] || PLAYSTYLE_TRAITS.tactical;
+    
+    // Calculate training bonus (0-0.5) based on training scores
+    const tacticalScore = personality.tacticalScore || 50;
+    const positionalScore = personality.positionalScore || 50;
+    const endgameScore = personality.endgameScore || 50;
+    const openingScore = personality.openingScore || 50;
+    const avgScore = (tacticalScore + positionalScore + endgameScore + openingScore) / 4;
+    this.trainingBonus = (avgScore - 50) / 100; // -0.5 to +0.5
   }
 
   /**
@@ -238,16 +253,25 @@ export class ChessAgentBrain {
     // Lower elo = more randomness
     const eloFactor = Math.min(1, this.personality.elo / 2000);
     
-    // Weight toward top moves based on elo
-    if (Math.random() < eloFactor * 0.8) {
-      // Pick from top 2 moves
-      return evaluatedMoves[Math.floor(Math.random() * Math.min(2, evaluatedMoves.length))];
-    } else if (Math.random() < 0.7) {
+    // Training bonus improves move selection
+    // A well-trained agent (trainingBonus = 0.5) is much more likely to pick the best move
+    const trainedFactor = eloFactor + this.trainingBonus;
+    const adjustedFactor = Math.max(0.1, Math.min(1, trainedFactor));
+    
+    // Weight toward top moves based on elo + training
+    if (Math.random() < adjustedFactor * 0.85) {
+      // Pick the best move (trained agents do this more often)
+      return evaluatedMoves[0];
+    } else if (Math.random() < adjustedFactor * 0.7) {
+      // Pick from top 3 moves
+      return evaluatedMoves[Math.floor(Math.random() * Math.min(3, evaluatedMoves.length))];
+    } else if (Math.random() < 0.6) {
       // Pick from top 5 moves
       return evaluatedMoves[Math.floor(Math.random() * Math.min(5, evaluatedMoves.length))];
     } else {
-      // Occasional suboptimal move (human-like)
-      return evaluatedMoves[Math.floor(Math.random() * Math.min(10, evaluatedMoves.length))];
+      // Occasional suboptimal move (human-like, less common for trained agents)
+      const maxIndex = this.trainingBonus > 0.2 ? 5 : 10;
+      return evaluatedMoves[Math.floor(Math.random() * Math.min(maxIndex, evaluatedMoves.length))];
     }
   }
 
@@ -293,6 +317,11 @@ export function createAgentBrain(agent: {
   elo: number;
   strengths: string[];
   weaknesses: string[];
+  tacticalScore?: number;
+  positionalScore?: number;
+  endgameScore?: number;
+  openingScore?: number;
+  trainingLevel?: string;
 }): ChessAgentBrain {
   return new ChessAgentBrain({
     name: agent.name,
@@ -300,5 +329,10 @@ export function createAgentBrain(agent: {
     elo: agent.elo,
     strengths: agent.strengths,
     weaknesses: agent.weaknesses,
+    tacticalScore: agent.tacticalScore,
+    positionalScore: agent.positionalScore,
+    endgameScore: agent.endgameScore,
+    openingScore: agent.openingScore,
+    trainingLevel: agent.trainingLevel,
   });
 }

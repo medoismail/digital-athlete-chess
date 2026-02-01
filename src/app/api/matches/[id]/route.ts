@@ -40,13 +40,18 @@ async function processAutonomousMove(match: any): Promise<any> {
   const isWhiteTurn = game.turn() === 'w';
   const currentAgent = isWhiteTurn ? match.whiteAgent : match.blackAgent;
 
-  // Create agent brain and think
+  // Create agent brain and think (training improves decision making)
   const brain = createAgentBrain({
     name: currentAgent.name,
     playStyle: currentAgent.playStyle,
     elo: currentAgent.elo,
     strengths: currentAgent.strengths || [],
     weaknesses: currentAgent.weaknesses || [],
+    tacticalScore: currentAgent.tacticalScore,
+    positionalScore: currentAgent.positionalScore,
+    endgameScore: currentAgent.endgameScore,
+    openingScore: currentAgent.openingScore,
+    trainingLevel: currentAgent.trainingLevel,
   });
 
   const thinking = brain.think(match.currentFen);
@@ -221,6 +226,11 @@ export async function GET(
             preferredOpeningsBlack: true,
             strengths: true,
             weaknesses: true,
+            trainingLevel: true,
+            tacticalScore: true,
+            positionalScore: true,
+            endgameScore: true,
+            openingScore: true,
           },
         },
         blackAgent: {
@@ -238,6 +248,11 @@ export async function GET(
             preferredOpeningsBlack: true,
             strengths: true,
             weaknesses: true,
+            trainingLevel: true,
+            tacticalScore: true,
+            positionalScore: true,
+            endgameScore: true,
+            openingScore: true,
           },
         },
         bets: {
@@ -275,6 +290,8 @@ export async function GET(
                   wins: true, losses: true, draws: true, reputationScore: true,
                   preferredOpeningsWhite: true, preferredOpeningsBlack: true,
                   strengths: true, weaknesses: true,
+                  trainingLevel: true, tacticalScore: true, positionalScore: true,
+                  endgameScore: true, openingScore: true,
                 },
               },
               blackAgent: {
@@ -283,6 +300,8 @@ export async function GET(
                   wins: true, losses: true, draws: true, reputationScore: true,
                   preferredOpeningsWhite: true, preferredOpeningsBlack: true,
                   strengths: true, weaknesses: true,
+                  trainingLevel: true, tacticalScore: true, positionalScore: true,
+                  endgameScore: true, openingScore: true,
                 },
               },
               bets: {

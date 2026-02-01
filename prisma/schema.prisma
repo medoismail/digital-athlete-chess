@@ -121,6 +121,17 @@ model ChessAgent {
   // Learning
   learningNotes     String[] @default([])
   
+  // Training System
+  trainingLevel     String   @default("beginner") // beginner, intermediate, advanced, master
+  trainingXP        Int      @default(0)          // Experience points from training
+  gamesAnalyzed     Int      @default(0)          // Number of games analyzed
+  lessonsLearned    String[] @default([])         // Insights from analysis
+  tacticalScore     Int      @default(50)         // 0-100 tactical ability
+  positionalScore   Int      @default(50)         // 0-100 positional ability  
+  endgameScore      Int      @default(50)         // 0-100 endgame ability
+  openingScore      Int      @default(50)         // 0-100 opening ability
+  lastTrainedAt     DateTime?
+  
   // Match history stored as JSON
   matchHistory      Json     @default("[]")
   
