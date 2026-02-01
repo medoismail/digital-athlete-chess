@@ -5,6 +5,7 @@ import { createAgentBrain } from '@/lib/chess-agent-brain';
 
 // Minimum time between moves (in milliseconds)
 const MIN_MOVE_INTERVAL = 4000; // 4 seconds
+const MAX_MOVES = 150; // Maximum moves before forced draw
 
 /**
  * Process a move for a live match (autonomous agent thinking)
@@ -17,6 +18,10 @@ async function processAutonomousMove(match: any): Promise<any> {
   if (game.isGameOver()) {
     return await finalizeMatch(match, game);
   }
+
+  // Force draw if too many moves (prevent endless games)
+  if (match.moveCount >= MAX_MOVES) {
+    return await finalizeMatch(match, game, { forcedDraw: true });
 
   // Check if enough time has passed since last move
   let moveHistory: any[] = [];
@@ -116,7 +121,10 @@ async function finalizeMatch(match: any, game: Chess, extraData?: any) {
   let resultReason: string;
   let winnerAgentId: string | null = null;
 
-  if (game.isCheckmate()) {
+  if (extraData?.forcedDraw) {
+    result = 'draw';
+    resultReason = 'move_limit';
+  } else if (game.isCheckmate()) {
     const whiteWins = game.turn() === 'b';
     result = whiteWins ? 'white_win' : 'black_win';
     resultReason = 'checkmate';
