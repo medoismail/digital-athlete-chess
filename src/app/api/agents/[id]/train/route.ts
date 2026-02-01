@@ -241,7 +241,8 @@ export async function POST(
 
         // Get unique lessons (last 20)
         const existingLessons = agent.lessonsLearned || [];
-        const combinedLessons = [...new Set([...allLessons, ...existingLessons])].slice(0, 20);
+        const allLessonsSet = new Set([...allLessons, ...existingLessons]);
+        const combinedLessons = Array.from(allLessonsSet).slice(0, 20);
 
         const updatedAgent = await prisma.chessAgent.update({
           where: { id: agentId },
