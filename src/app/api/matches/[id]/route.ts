@@ -22,6 +22,7 @@ async function processAutonomousMove(match: any): Promise<any> {
   // Force draw if too many moves (prevent endless games)
   if (match.moveCount >= MAX_MOVES) {
     return await finalizeMatch(match, game, { forcedDraw: true });
+  }
 
   // Check if enough time has passed since last move
   let moveHistory: any[] = [];
