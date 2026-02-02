@@ -60,12 +60,12 @@ const styleDescriptions: Record<PlayStyle, string> = {
   'endgame-oriented': 'Simplification, technique, converts small advantages',
 };
 
-const styleConfig: Record<PlayStyle, { gradient: string; badge: string; icon: string }> = {
-  aggressive: { gradient: 'from-red-500 to-orange-500', badge: 'bg-red-500/20 text-red-300 border-red-500/30', icon: '⚔️' },
-  positional: { gradient: 'from-blue-500 to-cyan-500', badge: 'bg-blue-500/20 text-blue-300 border-blue-500/30', icon: '🏰' },
-  defensive: { gradient: 'from-green-500 to-emerald-500', badge: 'bg-green-500/20 text-green-300 border-green-500/30', icon: '🛡️' },
-  tactical: { gradient: 'from-purple-500 to-pink-500', badge: 'bg-purple-500/20 text-purple-300 border-purple-500/30', icon: '🎯' },
-  'endgame-oriented': { gradient: 'from-amber-500 to-yellow-500', badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30', icon: '👑' },
+const styleConfig: Record<PlayStyle, { color: string; badge: string; icon: string }> = {
+  aggressive: { color: 'bg-red-500', badge: 'bg-red-500/20 text-red-300 border-red-500/30', icon: '⚔️' },
+  positional: { color: 'bg-blue-500', badge: 'bg-blue-500/20 text-blue-300 border-blue-500/30', icon: '🏰' },
+  defensive: { color: 'bg-green-500', badge: 'bg-green-500/20 text-green-300 border-green-500/30', icon: '🛡️' },
+  tactical: { color: 'bg-purple-500', badge: 'bg-purple-500/20 text-purple-300 border-purple-500/30', icon: '🎯' },
+  'endgame-oriented': { color: 'bg-amber-500', badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30', icon: '👑' },
 };
 
 export default function ChessAgentPage() {
@@ -170,7 +170,7 @@ export default function ChessAgentPage() {
       <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center">
               <span className="text-white font-bold text-sm">DA</span>
             </div>
             <span className="text-xl font-bold">Digital Athlete</span>
@@ -200,7 +200,7 @@ export default function ChessAgentPage() {
         {/* Header */}
         <div className="text-center mb-10">
           <h1 className="text-4xl md:text-5xl font-bold mb-3">
-            <span className="gradient-text">Chess Digital Athletes</span>
+            <span className="text-violet-500">Chess Digital Athletes</span>
           </h1>
           <p className="text-muted-foreground">
             Autonomous AI agents competing with style, strategy, and reputation
@@ -298,7 +298,7 @@ export default function ChessAgentPage() {
                         <div className="w-16 hidden sm:block">
                           <div className="h-2 bg-muted rounded-full overflow-hidden">
                             <div 
-                              className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500"
+                              className="h-full bg-violet-500"
                               style={{ width: `${agent.stats.reputationScore}%` }}
                             />
                           </div>
@@ -379,11 +379,11 @@ export default function ChessAgentPage() {
                     {playStyles.map((style) => (
                       <Card
                         key={style}
-                        className={`cursor-pointer transition-all ${
-                          selectedStyle === style
-                            ? `bg-gradient-to-r ${styleConfig[style].gradient} border-transparent`
-                            : 'bg-card/30 border-border/50 hover:border-primary/30'
-                        }`}
+                          className={`cursor-pointer transition-all ${
+                            selectedStyle === style
+                              ? `${styleConfig[style].color} border-transparent`
+                              : 'bg-card/30 border-border/50 hover:border-primary/30'
+                          }`}
                         onClick={() => setSelectedStyle(style)}
                       >
                         <CardContent className="p-4">
@@ -456,7 +456,7 @@ export default function ChessAgentPage() {
             </Button>
 
             {/* Agent Header */}
-            <Card className={`bg-gradient-to-r ${styleConfig[selectedAgent.identity.playStyle].gradient} border-0 mb-8`}>
+            <Card className={`${styleConfig[selectedAgent.identity.playStyle].color} border-0 mb-8`}>
               <CardContent className="p-8">
                 <div className="flex items-center justify-between flex-wrap gap-6">
                   <div className="flex items-center gap-4">
@@ -523,7 +523,7 @@ export default function ChessAgentPage() {
                 <CardContent>
                   <div className="relative h-4 bg-muted rounded-full overflow-hidden">
                     <div 
-                      className="absolute h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full transition-all"
+                      className="absolute h-full bg-violet-500 rounded-full transition-all"
                       style={{ width: `${selectedAgent.stats.reputationScore}%` }}
                     />
                   </div>
@@ -560,7 +560,7 @@ export default function ChessAgentPage() {
             </div>
 
             {/* View Matches CTA */}
-            <Card className="bg-gradient-to-r from-violet-600/20 to-fuchsia-600/20 border-primary/30 mb-8">
+            <Card className="bg-violet-600/10 border-violet-500/30 mb-8">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <div>
