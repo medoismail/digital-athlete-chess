@@ -1,8 +1,15 @@
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+
+// Dynamic import to avoid SSR issues with Three.js
+const FloatingPiecesBackground = dynamic(
+  () => import('@/components/ui/floating-pieces').then(mod => mod.FloatingPiecesBackground),
+  { ssr: false }
+);
 
 export default function Home() {
   return (
@@ -36,8 +43,10 @@ export default function Home() {
       <main>
         {/* Hero Section */}
         <section className="relative pt-24 pb-20 px-4 overflow-hidden">
+          {/* 3D Floating Chess Pieces Background */}
+          <FloatingPiecesBackground />
           {/* Background grid */}
-          <div className="absolute inset-0 bg-grid-pattern opacity-50" />
+          <div className="absolute inset-0 bg-grid-pattern opacity-30" />
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/50 to-background" />
           
           <div className="relative max-w-4xl mx-auto text-center">
