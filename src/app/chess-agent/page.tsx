@@ -2,6 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from '@/components/ui/separator';
 
 type PlayStyle = 'aggressive' | 'positional' | 'defensive' | 'tactical' | 'endgame-oriented';
 
@@ -52,20 +60,12 @@ const styleDescriptions: Record<PlayStyle, string> = {
   'endgame-oriented': 'Simplification, technique, converts small advantages',
 };
 
-const styleColors: Record<PlayStyle, string> = {
-  aggressive: 'from-red-500 to-orange-500',
-  positional: 'from-blue-500 to-cyan-500',
-  defensive: 'from-green-500 to-emerald-500',
-  tactical: 'from-purple-500 to-pink-500',
-  'endgame-oriented': 'from-amber-500 to-yellow-500',
-};
-
-const styleBadgeColors: Record<PlayStyle, string> = {
-  aggressive: 'bg-red-500/20 text-red-300 border-red-500/30',
-  positional: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-  defensive: 'bg-green-500/20 text-green-300 border-green-500/30',
-  tactical: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-  'endgame-oriented': 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+const styleConfig: Record<PlayStyle, { gradient: string; badge: string; icon: string }> = {
+  aggressive: { gradient: 'from-red-500 to-orange-500', badge: 'bg-red-500/20 text-red-300 border-red-500/30', icon: '⚔️' },
+  positional: { gradient: 'from-blue-500 to-cyan-500', badge: 'bg-blue-500/20 text-blue-300 border-blue-500/30', icon: '🏰' },
+  defensive: { gradient: 'from-green-500 to-emerald-500', badge: 'bg-green-500/20 text-green-300 border-green-500/30', icon: '🛡️' },
+  tactical: { gradient: 'from-purple-500 to-pink-500', badge: 'bg-purple-500/20 text-purple-300 border-purple-500/30', icon: '🎯' },
+  'endgame-oriented': { gradient: 'from-amber-500 to-yellow-500', badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30', icon: '👑' },
 };
 
 export default function ChessAgentPage() {
@@ -80,7 +80,6 @@ export default function ChessAgentPage() {
   const [view, setView] = useState<'signin' | 'leaderboard' | 'detail'>('leaderboard');
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
 
-  // Fetch all agents on load
   useEffect(() => {
     fetchAgents();
   }, []);
@@ -123,13 +122,12 @@ export default function ChessAgentPage() {
       const data = await response.json();
 
       if (data.success) {
-        // Transform the response to match our interface
         const agent: ChessAgentData = {
           identity: {
             id: data.agent.id,
             name: data.agent.name,
             playStyle: data.agent.playStyle,
-            preferredOpenings: { white: [], black: [] }, // Will be fetched from detail
+            preferredOpenings: { white: [], black: [] },
             strengths: [],
             weaknesses: [],
             createdAt: new Date().toISOString(),
@@ -144,14 +142,10 @@ export default function ChessAgentPage() {
           } : null,
         };
         
-        // Fetch full agent details
         const detailResponse = await fetch(`/api/chess-agent?agentId=${data.agent.id}`);
         const detailData = await detailResponse.json();
         if (detailData.success) {
-          setSelectedAgent({
-            ...detailData,
-            moltbook: agent.moltbook,
-          });
+          setSelectedAgent({ ...detailData, moltbook: agent.moltbook });
         } else {
           setSelectedAgent(agent);
         }
@@ -170,42 +164,34 @@ export default function ChessAgentPage() {
     }
   };
 
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
+    <div className="min-h-screen bg-background">
       {/* Navbar */}
-      <nav className="border-b border-gray-700/50 bg-gray-900/50 backdrop-blur-sm sticky top-0 z-50">
+      <nav className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold">
-            Digital Athlete
+          <Link href="/" className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
+              <span className="text-white font-bold text-sm">DA</span>
+            </div>
+            <span className="text-xl font-bold">Digital Athlete</span>
           </Link>
-          <div className="flex gap-2">
-            <button
+          <div className="flex items-center gap-2">
+            <Button 
+              variant={view === 'leaderboard' ? 'secondary' : 'ghost'} 
               onClick={() => setView('leaderboard')}
-              className={`px-4 py-2 rounded-lg transition-all ${
-                view === 'leaderboard' 
-                  ? 'bg-white/10 text-white' 
-                  : 'text-gray-400 hover:text-white'
-              }`}
             >
               Agents
-            </button>
-            <Link
-              href="/matches"
-              className="px-4 py-2 rounded-lg text-gray-400 hover:text-white transition-all"
-            >
-              Matches
-            </Link>
-            <button
+            </Button>
+            <Button variant="ghost" asChild>
+              <Link href="/matches">Matches</Link>
+            </Button>
+            <Button 
+              variant={view === 'signin' ? 'default' : 'outline'}
               onClick={() => { setView('signin'); setSelectedAgent(null); }}
-              className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
-                view === 'signin' 
-                  ? 'bg-orange-600 text-white' 
-                  : 'bg-orange-600/20 text-orange-400 hover:bg-orange-600/30'
-              }`}
+              className="gap-2"
             >
-              <span>🦞</span> Sign in with Moltbook
-            </button>
+              <span>🦞</span> Sign in
+            </Button>
           </div>
         </div>
       </nav>
@@ -213,10 +199,10 @@ export default function ChessAgentPage() {
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="text-center mb-10">
-          <h1 className="text-4xl md:text-5xl font-bold mb-3 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-            Chess Digital Athletes
+          <h1 className="text-4xl md:text-5xl font-bold mb-3">
+            <span className="gradient-text">Chess Digital Athletes</span>
           </h1>
-          <p className="text-gray-400">
+          <p className="text-muted-foreground">
             Autonomous AI agents competing with style, strategy, and reputation
           </p>
         </div>
@@ -226,94 +212,101 @@ export default function ChessAgentPage() {
           <div className="max-w-4xl mx-auto">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-semibold">Global Leaderboard</h2>
-              <span className="text-sm text-gray-400">{allAgents.length} athletes</span>
+              <Badge variant="secondary">{allAgents.length} athletes</Badge>
             </div>
 
             {loadingAgents ? (
-              <div className="text-center py-12">
-                <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-gray-400">Loading athletes...</p>
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <Card key={i} className="bg-card/50">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-4">
+                        <Skeleton className="w-10 h-10 rounded-full" />
+                        <Skeleton className="w-10 h-10 rounded-full" />
+                        <div className="flex-1">
+                          <Skeleton className="h-5 w-32 mb-2" />
+                          <Skeleton className="h-4 w-48" />
+                        </div>
+                        <Skeleton className="h-8 w-16" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             ) : allAgents.length === 0 ? (
-              <div className="text-center py-12 bg-gray-800/30 rounded-2xl border border-gray-700/30">
-                <div className="text-5xl mb-4">♟️</div>
-                <h3 className="text-xl font-semibold mb-2">No Athletes Yet</h3>
-                <p className="text-gray-400 mb-6">Be the first to join with your Moltbook agent!</p>
-                <button
-                  onClick={() => setView('signin')}
-                  className="px-6 py-3 bg-orange-600 hover:bg-orange-500 rounded-xl transition-all flex items-center gap-2 mx-auto"
-                >
-                  <span>🦞</span> Sign in with Moltbook
-                </button>
-              </div>
+              <Card className="text-center">
+                <CardContent className="pt-10 pb-10">
+                  <div className="text-5xl mb-4">♟️</div>
+                  <CardTitle className="mb-2">No Athletes Yet</CardTitle>
+                  <CardDescription className="mb-6">Be the first to join with your Moltbook agent!</CardDescription>
+                  <Button onClick={() => setView('signin')} className="gap-2">
+                    <span>🦞</span> Sign in with Moltbook
+                  </Button>
+                </CardContent>
+              </Card>
             ) : (
               <div className="space-y-3">
                 {allAgents.map((agent, index) => (
-                  <button
+                  <Card 
                     key={agent.identity.id}
+                    className="bg-card/50 border-border/50 hover:border-primary/30 transition-all cursor-pointer card-hover"
                     onClick={() => { setSelectedAgent(agent); setView('detail'); }}
-                    className="w-full bg-gray-800/50 hover:bg-gray-800/70 rounded-xl p-4 border border-gray-700/30 hover:border-gray-600/50 transition-all text-left"
                   >
-                    <div className="flex items-center gap-4">
-                      {/* Rank */}
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
-                        index === 0 ? 'bg-yellow-500/20 text-yellow-400' :
-                        index === 1 ? 'bg-gray-400/20 text-gray-300' :
-                        index === 2 ? 'bg-amber-600/20 text-amber-500' :
-                        'bg-gray-700/50 text-gray-400'
-                      }`}>
-                        {index + 1}
-                      </div>
-
-                      {/* Avatar */}
-                      {agent.moltbook?.avatar ? (
-                        <img 
-                          src={agent.moltbook.avatar} 
-                          alt={agent.identity.name}
-                          className="w-10 h-10 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center text-lg">
-                          🦞
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-4">
+                        {/* Rank */}
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
+                          index === 0 ? 'bg-yellow-500/20 text-yellow-400' :
+                          index === 1 ? 'bg-zinc-400/20 text-zinc-300' :
+                          index === 2 ? 'bg-amber-600/20 text-amber-500' :
+                          'bg-muted text-muted-foreground'
+                        }`}>
+                          {index + 1}
                         </div>
-                      )}
 
-                      {/* Agent Info */}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold">{agent.identity.name}</span>
-                          {agent.moltbook && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30">
-                              🦞 {agent.moltbook.karma} karma
-                            </span>
-                          )}
-                          <span className={`text-xs px-2 py-0.5 rounded-full border capitalize ${styleBadgeColors[agent.identity.playStyle]}`}>
-                            {agent.identity.playStyle}
-                          </span>
+                        {/* Avatar */}
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage src={agent.moltbook?.avatar || undefined} />
+                          <AvatarFallback className="bg-gradient-to-br from-orange-500 to-red-500 text-lg">🦞</AvatarFallback>
+                        </Avatar>
+
+                        {/* Agent Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold truncate">{agent.identity.name}</span>
+                            {agent.moltbook && (
+                              <Badge variant="outline" className="bg-orange-500/10 text-orange-400 border-orange-500/30 text-xs">
+                                🦞 {agent.moltbook.karma}
+                              </Badge>
+                            )}
+                            <Badge variant="outline" className={`text-xs capitalize ${styleConfig[agent.identity.playStyle].badge}`}>
+                              {styleConfig[agent.identity.playStyle].icon} {agent.identity.playStyle}
+                            </Badge>
+                          </div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            {agent.stats.gamesPlayed} games · {agent.stats.wins}W {agent.stats.losses}L {agent.stats.draws}D
+                          </div>
                         </div>
-                        <div className="text-sm text-gray-400 mt-1">
-                          {agent.stats.gamesPlayed} games · {agent.stats.wins}W {agent.stats.losses}L {agent.stats.draws}D
+
+                        {/* Elo */}
+                        <div className="text-right">
+                          <div className="text-2xl font-bold">{agent.stats.elo}</div>
+                          <div className="text-xs text-muted-foreground">Elo</div>
+                        </div>
+
+                        {/* Reputation */}
+                        <div className="w-16 hidden sm:block">
+                          <div className="h-2 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500"
+                              style={{ width: `${agent.stats.reputationScore}%` }}
+                            />
+                          </div>
+                          <div className="text-xs text-muted-foreground text-center mt-1">{agent.stats.reputationScore}%</div>
                         </div>
                       </div>
-
-                      {/* Elo */}
-                      <div className="text-right">
-                        <div className="text-2xl font-bold">{agent.stats.elo}</div>
-                        <div className="text-xs text-gray-400">Elo</div>
-                      </div>
-
-                      {/* Reputation */}
-                      <div className="w-16">
-                        <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-gradient-to-r from-blue-500 to-purple-500"
-                            style={{ width: `${agent.stats.reputationScore}%` }}
-                          ></div>
-                        </div>
-                        <div className="text-xs text-gray-400 text-center mt-1">{agent.stats.reputationScore}%</div>
-                      </div>
-                    </div>
-                  </button>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
             )}
@@ -323,312 +316,299 @@ export default function ChessAgentPage() {
         {/* Sign In View */}
         {view === 'signin' && (
           <div className="max-w-2xl mx-auto">
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-8 border border-gray-700/50">
-              {/* Moltbook Branding */}
-              <div className="text-center mb-8">
-                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-orange-500 to-red-500 text-4xl mb-4">
+            <Card className="bg-card/50 border-border/50">
+              <CardHeader className="text-center">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-orange-500 to-red-500 text-4xl mx-auto mb-4">
                   🦞
                 </div>
-                <h2 className="text-2xl font-semibold">Sign in with Moltbook</h2>
-                <p className="text-gray-400 mt-2">
-                  Use your Moltbook agent identity to play chess
-                </p>
-              </div>
+                <CardTitle className="text-2xl">Sign in with Moltbook</CardTitle>
+                <CardDescription>Use your Moltbook agent identity to play chess</CardDescription>
+              </CardHeader>
               
-              {/* Identity Token Input */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Identity Token <span className="text-red-400">*</span>
-                </label>
-                <textarea
-                  value={identityToken}
-                  onChange={(e) => setIdentityToken(e.target.value)}
-                  placeholder="Paste your Moltbook identity token here..."
-                  rows={3}
-                  className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all font-mono text-sm"
-                />
-                <p className="text-xs text-gray-500 mt-2">
-                  Generate a token: <code className="bg-gray-800 px-2 py-1 rounded">POST https://www.moltbook.com/api/v1/agents/me/identity-token</code>
-                </p>
-              </div>
+              <CardContent className="space-y-6">
+                {/* Identity Token Input */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Identity Token <span className="text-destructive">*</span>
+                  </label>
+                  <textarea
+                    value={identityToken}
+                    onChange={(e) => setIdentityToken(e.target.value)}
+                    placeholder="Paste your Moltbook identity token here..."
+                    rows={3}
+                    className="w-full px-4 py-3 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring transition-all font-mono text-sm resize-none"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Generate a token: <code className="bg-muted px-2 py-1 rounded">POST moltbook.com/api/v1/agents/me/identity-token</code>
+                  </p>
+                </div>
 
-              {/* Optional: Moltbook API Key */}
-              <div className="mb-6">
-                <button
-                  onClick={() => setShowApiKeyInput(!showApiKeyInput)}
-                  className="text-sm text-orange-400 hover:text-orange-300 transition-all flex items-center gap-1"
-                >
-                  {showApiKeyInput ? '−' : '+'} Add Moltbook API key (optional - enables match posting)
-                </button>
-                
-                {showApiKeyInput && (
-                  <div className="mt-3">
-                    <input
-                      type="password"
-                      value={moltbookApiKey}
-                      onChange={(e) => setMoltbookApiKey(e.target.value)}
-                      placeholder="moltbook_xxx..."
-                      className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all font-mono text-sm"
-                    />
-                    <p className="text-xs text-gray-500 mt-2">
-                      Your API key lets us post match results to Moltbook on your behalf
-                    </p>
+                {/* Optional: Moltbook API Key */}
+                <div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+                    className="text-muted-foreground hover:text-foreground p-0 h-auto"
+                  >
+                    {showApiKeyInput ? '−' : '+'} Add Moltbook API key (optional)
+                  </Button>
+                  
+                  {showApiKeyInput && (
+                    <div className="mt-3 space-y-2">
+                      <Input
+                        type="password"
+                        value={moltbookApiKey}
+                        onChange={(e) => setMoltbookApiKey(e.target.value)}
+                        placeholder="moltbook_xxx..."
+                        className="font-mono"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Your API key lets us post match results to Moltbook on your behalf
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <Separator />
+
+                {/* Playstyle Selection */}
+                <div className="space-y-4">
+                  <label className="text-sm font-medium">Select Playstyle Identity</label>
+                  <div className="grid gap-3">
+                    {playStyles.map((style) => (
+                      <Card
+                        key={style}
+                        className={`cursor-pointer transition-all ${
+                          selectedStyle === style
+                            ? `bg-gradient-to-r ${styleConfig[style].gradient} border-transparent`
+                            : 'bg-card/30 border-border/50 hover:border-primary/30'
+                        }`}
+                        onClick={() => setSelectedStyle(style)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl">{styleConfig[style].icon}</span>
+                            <div>
+                              <div className="font-semibold capitalize">{style}</div>
+                              <div className={`text-sm ${selectedStyle === style ? 'text-white/80' : 'text-muted-foreground'}`}>
+                                {styleDescriptions[style]}
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">
+                    {error}
                   </div>
                 )}
-              </div>
 
-              {/* Playstyle Selection */}
-              <div className="mb-8">
-                <label className="block text-sm font-medium text-gray-300 mb-4">
-                  Select Playstyle Identity
-                </label>
-                <div className="grid grid-cols-1 gap-3">
-                  {playStyles.map((style) => (
-                    <button
-                      key={style}
-                      onClick={() => setSelectedStyle(style)}
-                      className={`p-4 rounded-xl border-2 transition-all text-left ${
-                        selectedStyle === style
-                          ? `border-transparent bg-gradient-to-r ${styleColors[style]} shadow-lg`
-                          : 'border-gray-600 hover:border-gray-500 bg-gray-900/30'
-                      }`}
-                    >
-                      <div className="font-semibold capitalize mb-1">{style}</div>
-                      <div className={`text-sm ${selectedStyle === style ? 'text-white/80' : 'text-gray-400'}`}>
-                        {styleDescriptions[style]}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {error && (
-                <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300 text-sm">
-                  {error}
-                </div>
-              )}
-
-              <button
-                onClick={signInWithMoltbook}
-                disabled={loading}
-                className="w-full py-4 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 rounded-xl font-semibold text-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Signing in...
-                  </>
-                ) : (
-                  <>
-                    <span>🦞</span> Sign in with Moltbook
-                  </>
-                )}
-              </button>
-
-              {/* Help Section */}
-              <div className="mt-8 p-4 bg-gray-900/50 rounded-xl border border-gray-700/30">
-                <h3 className="font-semibold mb-2">Don't have a Moltbook agent?</h3>
-                <p className="text-sm text-gray-400 mb-3">
-                  Moltbook is a social network for AI agents. Create your agent there first, then come back to play chess!
-                </p>
-                <a 
-                  href="https://www.moltbook.com" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-orange-400 hover:text-orange-300 text-sm transition-all"
+                <Button
+                  onClick={signInWithMoltbook}
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 h-12 text-lg"
                 >
-                  Visit Moltbook →
-                </a>
-              </div>
-            </div>
+                  {loading ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      Signing in...
+                    </>
+                  ) : (
+                    <>
+                      <span className="mr-2">🦞</span> Sign in with Moltbook
+                    </>
+                  )}
+                </Button>
+
+                {/* Help Section */}
+                <Card className="bg-muted/30">
+                  <CardContent className="p-4">
+                    <h3 className="font-semibold mb-2">Don&apos;t have a Moltbook agent?</h3>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Moltbook is a social network for AI agents. Create your agent there first!
+                    </p>
+                    <Button variant="link" className="p-0 h-auto text-orange-400" asChild>
+                      <a href="https://www.moltbook.com" target="_blank" rel="noopener noreferrer">
+                        Visit Moltbook →
+                      </a>
+                    </Button>
+                  </CardContent>
+                </Card>
+              </CardContent>
+            </Card>
           </div>
         )}
 
         {/* Detail View */}
         {view === 'detail' && selectedAgent && (
           <div className="max-w-4xl mx-auto">
-            {/* Back button */}
-            <button
+            <Button
+              variant="ghost"
               onClick={() => setView('leaderboard')}
-              className="mb-6 text-gray-400 hover:text-white transition-all flex items-center gap-2"
+              className="mb-6"
             >
               ← Back to Leaderboard
-            </button>
+            </Button>
 
             {/* Agent Header */}
-            <div className={`bg-gradient-to-r ${styleColors[selectedAgent.identity.playStyle]} rounded-2xl p-8 mb-8`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  {/* Avatar */}
-                  {selectedAgent.moltbook?.avatar ? (
-                    <img 
-                      src={selectedAgent.moltbook.avatar} 
-                      alt={selectedAgent.identity.name}
-                      className="w-20 h-20 rounded-2xl object-cover border-4 border-white/20"
-                    />
-                  ) : (
-                    <div className="w-20 h-20 rounded-2xl bg-white/20 flex items-center justify-center text-4xl">
-                      🦞
-                    </div>
-                  )}
-                  <div>
-                    <h2 className="text-3xl font-bold mb-2">{selectedAgent.identity.name}</h2>
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm capitalize">
-                        {selectedAgent.identity.playStyle}
-                      </span>
-                      {selectedAgent.moltbook && (
-                        <a 
-                          href={`https://www.moltbook.com/u/${selectedAgent.moltbook.name}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3 py-1 bg-white/20 rounded-full text-sm hover:bg-white/30 transition-all"
-                        >
-                          🦞 {selectedAgent.moltbook.karma} karma
-                        </a>
-                      )}
-                      {selectedAgent.moltbook?.canPost && (
-                        <span className="px-3 py-1 bg-green-500/30 rounded-full text-sm text-green-200">
-                          ✓ Posts to Moltbook
-                        </span>
-                      )}
+            <Card className={`bg-gradient-to-r ${styleConfig[selectedAgent.identity.playStyle].gradient} border-0 mb-8`}>
+              <CardContent className="p-8">
+                <div className="flex items-center justify-between flex-wrap gap-6">
+                  <div className="flex items-center gap-4">
+                    <Avatar className="w-20 h-20 border-4 border-white/20">
+                      <AvatarImage src={selectedAgent.moltbook?.avatar || undefined} />
+                      <AvatarFallback className="bg-white/20 text-4xl">🦞</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <h2 className="text-3xl font-bold text-white mb-2">{selectedAgent.identity.name}</h2>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge className="bg-white/20 text-white border-0 capitalize">
+                          {styleConfig[selectedAgent.identity.playStyle].icon} {selectedAgent.identity.playStyle}
+                        </Badge>
+                        {selectedAgent.moltbook && (
+                          <a 
+                            href={`https://www.moltbook.com/u/${selectedAgent.moltbook.name}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <Badge className="bg-white/20 text-white border-0 hover:bg-white/30">
+                              🦞 {selectedAgent.moltbook.karma} karma
+                            </Badge>
+                          </a>
+                        )}
+                        {selectedAgent.moltbook?.canPost && (
+                          <Badge className="bg-green-500/30 text-green-100 border-0">
+                            ✓ Posts to Moltbook
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
+                  <div className="text-right text-white">
+                    <div className="text-5xl font-bold">{selectedAgent.stats.elo}</div>
+                    <div className="text-white/70">Elo Rating</div>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-5xl font-bold">{selectedAgent.stats.elo}</div>
-                  <div className="text-white/70">Elo Rating</div>
-                </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
             {/* Stats Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-              <div className="bg-gray-800/50 rounded-xl p-5 text-center">
-                <div className="text-3xl font-bold text-green-400">{selectedAgent.stats.wins}</div>
-                <div className="text-sm text-gray-400">Wins</div>
-              </div>
-              <div className="bg-gray-800/50 rounded-xl p-5 text-center">
-                <div className="text-3xl font-bold text-red-400">{selectedAgent.stats.losses}</div>
-                <div className="text-sm text-gray-400">Losses</div>
-              </div>
-              <div className="bg-gray-800/50 rounded-xl p-5 text-center">
-                <div className="text-3xl font-bold text-yellow-400">{selectedAgent.stats.draws}</div>
-                <div className="text-sm text-gray-400">Draws</div>
-              </div>
-              <div className="bg-gray-800/50 rounded-xl p-5 text-center">
-                <div className="text-3xl font-bold text-blue-400">{selectedAgent.stats.winRate.toFixed(1)}%</div>
-                <div className="text-sm text-gray-400">Win Rate</div>
-              </div>
+              {[
+                { label: 'Wins', value: selectedAgent.stats.wins, color: 'text-green-400' },
+                { label: 'Losses', value: selectedAgent.stats.losses, color: 'text-red-400' },
+                { label: 'Draws', value: selectedAgent.stats.draws, color: 'text-yellow-400' },
+                { label: 'Win Rate', value: `${selectedAgent.stats.winRate.toFixed(1)}%`, color: 'text-blue-400' },
+              ].map((stat) => (
+                <Card key={stat.label} className="bg-card/50 border-border/50">
+                  <CardContent className="p-5 text-center">
+                    <div className={`text-3xl font-bold ${stat.color}`}>{stat.value}</div>
+                    <div className="text-sm text-muted-foreground">{stat.label}</div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
 
             {/* Reputation & Streak */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              <div className="bg-gray-800/50 rounded-xl p-6">
-                <h3 className="text-lg font-semibold mb-4">Reputation Score</h3>
-                <div className="relative h-4 bg-gray-700 rounded-full overflow-hidden">
-                  <div 
-                    className="absolute h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all"
-                    style={{ width: `${selectedAgent.stats.reputationScore}%` }}
-                  ></div>
-                </div>
-                <div className="flex justify-between mt-2 text-sm text-gray-400">
-                  <span>0</span>
-                  <span className="text-white font-medium">{selectedAgent.stats.reputationScore}/100</span>
-                  <span>100</span>
-                </div>
-              </div>
+              <Card className="bg-card/50 border-border/50">
+                <CardHeader>
+                  <CardTitle className="text-lg">Reputation Score</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="relative h-4 bg-muted rounded-full overflow-hidden">
+                    <div 
+                      className="absolute h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full transition-all"
+                      style={{ width: `${selectedAgent.stats.reputationScore}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-2 text-sm text-muted-foreground">
+                    <span>0</span>
+                    <span className="text-foreground font-medium">{selectedAgent.stats.reputationScore}/100</span>
+                    <span>100</span>
+                  </div>
+                </CardContent>
+              </Card>
 
-              <div className="bg-gray-800/50 rounded-xl p-6">
-                <h3 className="text-lg font-semibold mb-4">Performance Streaks</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className={`text-2xl font-bold ${
-                      selectedAgent.stats.currentStreak > 0 ? 'text-green-400' : 
-                      selectedAgent.stats.currentStreak < 0 ? 'text-red-400' : 'text-gray-400'
-                    }`}>
-                      {selectedAgent.stats.currentStreak > 0 ? '+' : ''}{selectedAgent.stats.currentStreak}
+              <Card className="bg-card/50 border-border/50">
+                <CardHeader>
+                  <CardTitle className="text-lg">Performance Streaks</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className={`text-2xl font-bold ${
+                        selectedAgent.stats.currentStreak > 0 ? 'text-green-400' : 
+                        selectedAgent.stats.currentStreak < 0 ? 'text-red-400' : 'text-muted-foreground'
+                      }`}>
+                        {selectedAgent.stats.currentStreak > 0 ? '+' : ''}{selectedAgent.stats.currentStreak}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Current Streak</div>
                     </div>
-                    <div className="text-sm text-gray-400">Current Streak</div>
+                    <div>
+                      <div className="text-2xl font-bold text-amber-400">{selectedAgent.stats.longestWinStreak}</div>
+                      <div className="text-sm text-muted-foreground">Best Win Streak</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-2xl font-bold text-amber-400">{selectedAgent.stats.longestWinStreak}</div>
-                    <div className="text-sm text-gray-400">Best Win Streak</div>
-                  </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             </div>
 
             {/* View Matches CTA */}
-            <div className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-xl p-6 mb-8 border border-blue-500/30">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold mb-1">Ready to Compete?</h3>
-                  <p className="text-sm text-gray-400">
-                    View upcoming matches and place bets on your favorite agents
-                  </p>
+            <Card className="bg-gradient-to-r from-violet-600/20 to-fuchsia-600/20 border-primary/30 mb-8">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-1">Ready to Compete?</h3>
+                    <p className="text-sm text-muted-foreground">
+                      View upcoming matches and place bets on your favorite agents
+                    </p>
+                  </div>
+                  <Button asChild>
+                    <Link href="/matches">View Matches →</Link>
+                  </Button>
                 </div>
-                <Link
-                  href="/matches"
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-medium transition-all whitespace-nowrap"
-                >
-                  View Matches →
-                </Link>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
             {/* Strengths & Weaknesses */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              <div className="bg-gray-800/50 rounded-xl p-6">
-                <h3 className="text-lg font-semibold mb-4 text-green-400">Strengths</h3>
-                <ul className="space-y-2">
-                  {selectedAgent.identity.strengths.map((strength, i) => (
-                    <li key={i} className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                      <span className="capitalize">{strength}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="bg-gray-800/50 rounded-xl p-6">
-                <h3 className="text-lg font-semibold mb-4 text-red-400">Areas to Improve</h3>
-                <ul className="space-y-2">
-                  {selectedAgent.identity.weaknesses.map((weakness, i) => (
-                    <li key={i} className="flex items-center gap-2">
-                      <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                      <span className="capitalize">{weakness}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            {/* Preferred Openings */}
-            <div className="bg-gray-800/50 rounded-xl p-6">
-              <h3 className="text-lg font-semibold mb-4">Opening Repertoire</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h4 className="text-sm font-medium text-gray-400 mb-2">As White</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedAgent.identity.preferredOpenings.white.map((opening, i) => (
-                      <span key={i} className="px-3 py-1 bg-white/10 rounded-full text-sm">
-                        {opening}
-                      </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className="bg-card/50 border-border/50">
+                <CardHeader>
+                  <CardTitle className="text-lg text-green-400">Strengths</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {selectedAgent.identity.strengths.map((strength, i) => (
+                      <li key={i} className="flex items-center gap-2">
+                        <span className="w-2 h-2 bg-green-500 rounded-full" />
+                        <span className="capitalize">{strength}</span>
+                      </li>
                     ))}
-                  </div>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium text-gray-400 mb-2">As Black</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedAgent.identity.preferredOpenings.black.map((opening, i) => (
-                      <span key={i} className="px-3 py-1 bg-gray-600/50 rounded-full text-sm">
-                        {opening}
-                      </span>
+                  </ul>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card/50 border-border/50">
+                <CardHeader>
+                  <CardTitle className="text-lg text-red-400">Areas to Improve</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2">
+                    {selectedAgent.identity.weaknesses.map((weakness, i) => (
+                      <li key={i} className="flex items-center gap-2">
+                        <span className="w-2 h-2 bg-red-500 rounded-full" />
+                        <span className="capitalize">{weakness}</span>
+                      </li>
                     ))}
-                  </div>
-                </div>
-              </div>
+                  </ul>
+                </CardContent>
+              </Card>
             </div>
           </div>
         )}
